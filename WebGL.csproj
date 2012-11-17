@@ -47,8 +47,14 @@
     <CodeAnalysisFailOnMissingRules>false</CodeAnalysisFailOnMissingRules>
   </PropertyGroup>
   <ItemGroup>
-    <Folder Include="Scripts\" />
     <ScriptFiles Include="Scripts\*.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Fusee.targets">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
     <Folder Include="Compiler\" />
   </ItemGroup>
   <Target Name="Build">
