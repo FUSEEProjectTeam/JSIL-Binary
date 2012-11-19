@@ -12,6 +12,7 @@ if (typeof (jsilConfig) === "undefined") {
 }
 
 JSIL.SuppressInterfaceWarnings = true;
+JSIL.ReadOnlyPropertyWriteWarnings = false;
 
 JSIL.GlobalNamespace = this;
 
@@ -45,10 +46,21 @@ JSIL.GetOwnPropertyDescriptorRecursive = function (target, name) {
 JSIL.SetValueProperty = function (target, key, value, enumerable) {
   var descriptor = {
     configurable: true,
-    enumerable: !(enumerable === false),
-    value: value,
-    writable: false
+    enumerable: !(enumerable === false)
   };
+
+  if (JSIL.ReadOnlyPropertyWriteWarnings) { 
+    descriptor.get = function () {
+      return value;
+    };
+    descriptor.set = function () {
+      throw new Error("Attempt to write to read-only property '" + key + "'!");
+    };
+  } else {
+    descriptor.value = value;
+    descriptor.writable = false;
+    descriptor.writeable = false;
+  }
 
   Object.defineProperty(target, key, descriptor);
 };
@@ -82,11 +94,9 @@ JSIL.DefineLazyDefaultProperty = function (target, key, getDefault) {
 
   var initIfNeeded = function (self) {
     if (!isInitialized) {
+      isInitialized = true;
       defaultValue = getDefault.call(self);
-      if (!isInitialized) {
-        isInitialized = true;
-        JSIL.Host.runLater(cleanup);
-      }
+      JSIL.Host.runLater(cleanup);
     }
   };
 
@@ -104,11 +114,19 @@ JSIL.DefineLazyDefaultProperty = function (target, key, getDefault) {
       value: value
     };
 
+    initIfNeeded(this);
+
+    // Overwrite the defaultValue so that any getter calls
+    //  still return the correct result.
+    defaultValue = value;
+
+    // We *NEED* to update the field after we run the initializer,
+    //  not before! If we update it before the initializer may overwrite
+    //  it, and worse still, the initializer may not be expecting to see
+    //  the write yet.
     Object.defineProperty(
       this, key, setterDesc
     );
-
-    initIfNeeded(this);
 
     return value;
   };
@@ -1652,6 +1670,11 @@ JSIL.ResolveGenericTypeReference = function (obj, context) {
   return obj;
 };
 
+JSIL.FoundGenericParameter = function (name, value) {
+  this.name = name;
+  this.value = value;
+};
+
 JSIL.FindGenericParameters = function (obj, type, resultList) {
   // Walk through our base types and identify any unresolved generic parameters.
   // This produces a list of parameters that need new values assigned in the target prototype.
@@ -1671,10 +1694,8 @@ JSIL.FindGenericParameters = function (obj, type, resultList) {
       var value = qualifiedName.get(obj);
 
       if ((typeof (value) === "object") && (value !== null)) {
-        if (Object.getPrototypeOf(value) === JSIL.GenericParameter.prototype) {
-          resultList.push([qualifiedName, value]);
-        } else if (!value.__IsClosed__) {
-          resultList.push([qualifiedName, value]);
+        if ((Object.getPrototypeOf(value) === JSIL.GenericParameter.prototype) || (!value.__IsClosed__)) {
+          resultList.push(new JSIL.FoundGenericParameter(qualifiedName, value));
         }
       }
     }
@@ -1868,8 +1889,8 @@ $jsilcore.$Of$NoInitialize = function () {
     JSIL.FindGenericParameters(result.prototype, resultTypeObject, genericParametersToResolve);
 
     for (var i = 0; i < genericParametersToResolve.length; i++) {
-      var qualifiedName = genericParametersToResolve[i][0];
-      var value = genericParametersToResolve[i][1];
+      var qualifiedName = genericParametersToResolve[i].name;
+      var value = genericParametersToResolve[i].value;
 
       var resolved = JSIL.ResolveGenericTypeReference(value, resolveContext);
       
@@ -2384,6 +2405,7 @@ JSIL.EscapeJSIdentifier = function (identifier) {
 
 JSIL.CreateNamedFunction = function (name, argumentNames, body, closure) {
   var uriRe = /[\<\>\+\/\\\.]/g;
+  var strictPrefix = "\"use strict\";\r\n";
   var uriPrefix = "//@ sourceURL=jsil://closure/" + name + "\r\n";
 
   var rawFunctionText = "(function " + JSIL.EscapeJSIdentifier(name) + "(" +
@@ -2408,7 +2430,7 @@ JSIL.CreateNamedFunction = function (name, argumentNames, body, closure) {
   var lineBreakRE = /\r(\n?)/g;
 
   rawFunctionText = 
-    uriPrefix + "    return " + rawFunctionText.replace(lineBreakRE, "\r\n    ") + ";\r\n";
+    uriPrefix + strictPrefix + "    return " + rawFunctionText.replace(lineBreakRE, "\r\n    ") + ";\r\n";
 
   var constructor = Function.apply(Function, keys.concat([rawFunctionText]));
   result = constructor.apply(null, closureArgumentList);
@@ -4409,8 +4431,11 @@ JSIL.MakeEnum = function (fullName, isPublic, members, isFlagsEnum) {
     typeObject.__IsEnum__ = true;
     typeObject.__IsValueType__ = true;
     typeObject.__IsReferenceType__ = false;
-    typeObject.__TypeId__ = JSIL.AssignTypeId(context, fullName);
-    publicInterface.__TypeId__ = typeObject.__TypeId__;
+
+    var typeId = JSIL.AssignTypeId(context, fullName);
+    JSIL.SetValueProperty(typeObject, "__TypeId__", typeId); 
+    JSIL.SetValueProperty(publicInterface, "__TypeId__", typeId); 
+
     typeObject.__IsFlagsEnum__ = isFlagsEnum;
     typeObject.__Interfaces__ = null;
 
@@ -4571,12 +4596,14 @@ JSIL.IsArray = function (value) {
   return false;
 };
 
-JSIL.IsTypedArray = function (value) {
-  if (typeof (value) === "object") {
-    var valueProto = Object.getPrototypeOf(value);
+JSIL.AreTypedArraysSupported = function () {
+  return (typeof (ArrayBuffer) !== "undefined");
+}
 
-    if (typeof (ArrayBuffer) === "function") {
-      if (value.buffer && (Object.getPrototypeOf(value.buffer) === ArrayBuffer.prototype))
+JSIL.IsTypedArray = function (value) {
+  if ((typeof (value) === "object") && value.buffer) {
+    if (typeof (ArrayBuffer) !== "undefined") {
+      if (Object.getPrototypeOf(value.buffer) === ArrayBuffer.prototype)
         return true;
     }
   }
@@ -4836,6 +4863,7 @@ JSIL.InterfaceBuilder.prototype.ParseDescriptor = function (descriptor, name, si
   result.Static = descriptor.Static || false;
   result.Public = descriptor.Public || false;
   result.Virtual = descriptor.Virtual || false;
+  result.ReadOnly = descriptor.ReadOnly || false;
 
   result.Name = name;
   result.EscapedName = escapedName;
@@ -5005,6 +5033,10 @@ JSIL.InterfaceBuilder.prototype.Field = function (_descriptor, fieldName, fieldT
   ) {
     var actualTarget = descriptor.Static ? classObject : fullyDerivedClassObject.prototype;
 
+    var maybeRunCctors = function MaybeRunStaticConstructors () {
+      JSIL.RunStaticConstructors(fullyDerivedClassObject, fullyDerivedTypeObject);
+    };
+
     // If the field has already been initialized, don't overwrite it.
     if (Object.getOwnPropertyDescriptor(actualTarget, descriptor.EscapedName))
       return;
@@ -5013,11 +5045,26 @@ JSIL.InterfaceBuilder.prototype.Field = function (_descriptor, fieldName, fieldT
       JSIL.DefineLazyDefaultProperty(
         actualTarget, descriptor.EscapedName,
         function InitFieldDefaultExpression () {
+          if (descriptor.Static)
+            maybeRunCctors();
+
           return data.defaultValue = defaultValueExpression(this);
         }
       );
     } else if (typeof (defaultValueExpression) !== "undefined") {
-      actualTarget[descriptor.EscapedName] = data.defaultValue = defaultValueExpression;
+      if (descriptor.Static) {
+        JSIL.DefineLazyDefaultProperty(
+          actualTarget, descriptor.EscapedName,
+          function InitFieldDefaultExpression () {
+            if (descriptor.Static)
+              maybeRunCctors();
+
+            return data.defaultValue = defaultValueExpression;
+          }
+        );
+      } else {
+        actualTarget[descriptor.EscapedName] = data.defaultValue = defaultValueExpression;
+      }
     } else {
       var members = typeObject.__Members__;
 
@@ -5047,10 +5094,6 @@ JSIL.InterfaceBuilder.prototype.Field = function (_descriptor, fieldName, fieldT
       if (
         descriptor.Static
       ) {
-        var maybeRunCctors = function MaybeRunStaticConstructors () {
-          JSIL.RunStaticConstructors(fullyDerivedClassObject, fullyDerivedTypeObject);
-        };
-
         JSIL.DefinePreInitField(
           actualTarget, descriptor.EscapedName,
           initFieldDefault, maybeRunCctors
@@ -5602,65 +5645,289 @@ JSIL.MethodSignatureCache.prototype.toString = function () {
   return "<Method Signature Cache>";
 };
 
-JSIL.ParseTypeName = function (name) {
-  var assemblyName = "", typeName = "", parenText = "";
-  var genericArguments = [];
-  var readingAssemblyName = false;
-  var parenDepth = 0;
 
-  for (var i = 0, l = name.length; i < l; i++) {
-    var ch = name[i];
+//
+// System.Type.cs
+//
+// Author:
+//   Rodrigo Kumpera <kumpera@gmail.com>
+//
+//
+// Copyright (C) 2010 Novell, Inc (http://www.novell.com)
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+// 
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
 
-    if (ch == ']') {
-      parenDepth -= 1;
+JSIL.TypeNameParseState = function (input, fromPosition) {
+  this.input = input;
+  this.pos = fromPosition;
+};
 
-      if (parenDepth == 0) {
-        if (parenText.length > 0) {
-          genericArguments.push(JSIL.ParseTypeName(parenText));
+Object.defineProperty(JSIL.TypeNameParseState.prototype, "eof", {
+  get: function () {
+    return this.pos >= this.input.length;
+  }
+});
+
+Object.defineProperty(JSIL.TypeNameParseState.prototype, "current", {
+  get: function () {
+    return this.input[this.pos];
+  }
+});
+
+JSIL.TypeNameParseState.prototype.substr = function (start, count) {
+  return this.input.substr(start, count);
+};
+
+JSIL.TypeNameParseState.prototype.moveNext = function () {
+  this.pos += 1;
+  return (this.pos < this.input.length);
+};
+
+JSIL.TypeNameParseState.prototype.skipWhitespace = function () {
+  var length = this.input.length;
+
+  while ((this.pos < length) && (this.current === ' '))
+    this.pos += 1;
+};
+
+JSIL.TypeNameParseResult = function () {
+  this.type = null;
+  this.assembly = null;
+  this.genericArguments = [];
+  this.arraySpec = [];
+  this.pointerLevel = 0;
+  this.isByRef = false;
+  this.parseEndedAt = null;
+};
+
+Object.defineProperty(JSIL.TypeNameParseResult.prototype, "isArray", {
+  get: function () {
+    return this.arraySpec.length > 0;
+  }
+});
+
+JSIL.TypeNameParseResult.prototype.addName = function (name) {
+  if (!this.type)
+    this.type = name;
+  else
+    this.type += "+" + name;
+};
+
+JSIL.TypeNameParseResult.prototype.addArray = function (array) {
+  this.arraySpec.push(array);
+};
+
+JSIL.ParseTypeNameImpl = function (input, fromPosition, isRecursive, allowQualifiedNames) {
+  var state = new JSIL.TypeNameParseState(input, fromPosition);
+  var inModifiers = false;
+
+  state.skipWhitespace();
+  var startPosition = state.pos;
+
+  var result = new JSIL.TypeNameParseResult();
+
+  while (state.moveNext()) {
+    switch (state.current) {
+      case '+':
+        result.addName(state.substr(startPosition, state.pos - startPosition));
+        startPosition = state.pos + 1;
+        break;
+
+      case ',':
+      case ']':
+        result.addName(state.substr(startPosition, state.pos - startPosition));
+        startPosition = state.pos + 1;
+
+        inModifiers = true;
+
+        if (isRecursive && !allowQualifiedNames) {
+          result.parseEndedAt = state.pos;
+          return result;
         }
 
-        parenText = "";
-      } else if (parenText.length > 0) {
-        parenText += ch;
-      }
-    } else if (ch == '[') {
-      if ((parenDepth > 0) && (parenText.length > 0))
-        parenText += ch;
+        break;
 
-      parenDepth += 1;
-    } else if (ch == ',') {
-      if (parenDepth > 0) {
-        parenText += ch;
-      } else if (readingAssemblyName) {
-        assemblyName += ",";
-      } else {
-        readingAssemblyName = true;
-      }
-    } else if (parenDepth > 0) {
-      parenText += ch;
-    } else if (readingAssemblyName) {
-      assemblyName += ch;
-    } else {
-      typeName += ch;
+      case '&':
+      case '*':
+      case '[':
+        if (isRecursive && (state.current !== '['))
+          throw new Error("Generic argument must be by-value and not a pointer");
+
+        result.addName(state.substr(startPosition, state.pos - startPosition));
+        startPosition = state.pos + 1;
+        inModifiers = true;
+
+        break;
     }
+
+    if (inModifiers)
+      break;
   }
 
-  if (assemblyName.length === 0)
-    assemblyName = null;
-  else
-    assemblyName = assemblyName.trim();
+  if (startPosition < state.pos)
+    result.addName(state.substr(startPosition, state.pos - startPosition));
 
-  if (genericArguments.length === 0)
-    genericArguments = null;
+  if (!inModifiers) {
+    result.parseEndedAt = state.pos;
+    return result;
+  }
 
-  var result = {
-    assembly: assemblyName,
-    type: typeName.trim(),
-    genericArguments: genericArguments
-  };
+  state.pos -= 1;
+
+  while (state.moveNext()) {
+    switch (state.current) {
+      case '&':
+        if (result.isByRef)
+          throw new Error("Too many &s");
+
+        result.isByRef = true;
+        break;
+
+      case '*':
+        if (result.isByRef)
+          throw new Error("Can't have a pointer to a byref type");
+
+        result.pointerLevel += 1;
+        break;
+
+      case ',':
+        if (isRecursive) {
+          var length = state.input.length, end = state.pos;
+
+          while (end < length && state.input[end] !== ']')
+            end += 1;
+
+          if (end >= length)
+            throw new Error("Unmatched '['");
+
+          result.assembly = state.substr(state.pos + 1, end - state.pos - 1).trim();
+          state.pos = end + 1;
+
+          result.parseEndedAt = state.pos;
+          return result;
+        }
+
+        result.assembly = state.substr(state.pos + 1).trim();
+        state.pos = length;
+        break;
+
+      case '[':
+        if (result.isByRef)
+          throw new Error("ByRef qualifier must be last part of type");
+
+        state.pos += 1;
+        if (state.pos >= length)
+            throw new Error("Invalid array/generic spec");
+
+        state.skipWhitespace();
+
+        var sch = state.current;
+        if (
+          (sch !== ',') && 
+          (sch !== '*') && 
+          (sch !== ']')
+        ) {
+          //generic args
+          if (result.isArray)
+            throw new ArgumentException ("generic args after array spec", "typeName");
+
+          while (!state.eof) {
+            state.skipWhitespace();
+
+            var aqn = state.current === '[';
+            if (aqn)
+              state.moveNext();
+
+            var subspec = JSIL.ParseTypeNameImpl(state.input, state.pos, true, aqn);
+            state.pos = subspec.parseEndedAt;
+
+            result.genericArguments.push(subspec);
+
+            if (state.eof)
+              throw new Error("Invalid generic args spec");
+
+            if (state.current === ']')
+              break;
+            else if (state.current === ',')
+              state.moveNext();
+            else
+              throw new Error("Invalid generic args separator");
+          }
+
+          if (state.eof || (state.current !== ']'))
+            throw new Error("Invalid generic args spec");
+
+        } else { 
+          //array spec
+          var dimensions = 1, bound = false;
+
+          while (!state.eof && (state.current !== ']')) {
+            if (state.current === '*') {
+              if (bound)
+                throw new Error("Array spec has too many bound dimensions");
+
+              bound = true;
+            } else if (state.current !== ',') {
+              throw new Error("Invalid character in array spec");
+            } else {
+              dimensions += 1;
+            }
+
+            state.moveNext();
+            state.skipWhitespace();
+          }
+
+          if (state.current !== ']')
+            throw new Error("Invalid array spec");
+          if ((dimensions > 1) && bound)
+            throw new Error("Invalid array spec: Multi-dimensional array can't be bound");
+
+          result.addArray({
+            dimensions: dimensions,
+            bound: bound
+          });
+        }
+
+        break;
+
+      case ']':
+        if (isRecursive) {
+          result.parseEndedAt = state.pos;
+          return result;
+        }
+
+        throw new Error("Unmatched ']'");
+
+      default:
+        throw new Error("Invalid type spec");
+    }
+  }  
 
   return result;
 };
+
+JSIL.ParseTypeName = function (name) {
+  return JSIL.ParseTypeNameImpl(name, 0, false, true);
+};
+
 
 JSIL.GetTypeInternal = function (parsedTypeName, defaultContext, throwOnFail) {
   var context = null;
@@ -6057,24 +6324,18 @@ JSIL.Array.New = function Array_New (elementType, sizeOrInitializer) {
   }
 
   if (elementTypeObject.__TypedArray__) {
-    result = new (elementTypeObject.__TypedArray__)(sizeOrInitializer);
+    result = new (elementTypeObject.__TypedArray__)(size);
   } else {
     result = new Array(size);
-
-    if (initializerIsArray) {
-      // If non-numeric, assume array initializer
-      for (var i = 0; i < sizeOrInitializer.length; i++)
-        result[i] = sizeOrInitializer[i];
-    } else {
-      JSIL.Array.Erase(result, elementType);
-    }
   }
 
-  /* Even worse, doing this deoptimizes all uses of the array in TraceMonkey. AUGH
-  // Can't do this the right way, because .prototype for arrays in JS is insanely busted
-  result.__FullName__ = type.__FullName__ + "[]";
-  result.toString = System.Object.prototype.toString;
-  */
+  if (initializerIsArray) {
+    // If non-numeric, assume array initializer
+    for (var i = 0; i < sizeOrInitializer.length; i++)
+      result[i] = sizeOrInitializer[i];
+  } else if (!elementTypeObject.__TypedArray__) {
+    JSIL.Array.Erase(result, elementType);
+  }
 
   return result;
 };
@@ -6336,9 +6597,6 @@ JSIL.GetMemberAttributes = function (memberInfo, inherit, attributeType, result)
       for (var i = 0, l = attributeRecords.length; i < l; i++) {
         var record = attributeRecords[i];
         var recordType = record.GetType();
-        if (attributeType && !tType.op_Equality(attributeType, recordType))
-          continue;
-
         var instance = record.Construct();
         attributes.push(instance);
       }
@@ -6348,8 +6606,13 @@ JSIL.GetMemberAttributes = function (memberInfo, inherit, attributeType, result)
   if (!result)
     result = [];
 
-  for (var i = 0, l = attributes.length; i < l; i++)
+  for (var i = 0, l = attributes.length; i < l; i++) {
+    var attribute = attributes[i];
+    if (attributeType && !tType.op_Equality(attributeType, attribute.GetType()))
+      continue;
+
     result.push(attributes[i]);
+  }
 
   return result;
 };

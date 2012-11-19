@@ -455,12 +455,17 @@ function updateProgressBar (prefix, suffix, bytesLoaded, bytesTotal) {
     progressBar.style.width = w.toString() + "px";
 
   if (progressText) {
+    var progressString;
     if (suffix === null) {
-      progressText.innerHTML = prefix;
+      progressString = prefix;
     } else {
-      progressText.innerHTML = prefix + Math.floor(bytesLoaded) + suffix + " / " + Math.floor(bytesTotal) + suffix;
+      progressString = prefix + Math.floor(bytesLoaded) + suffix + " / " + Math.floor(bytesTotal) + suffix;
     }
 
+    if (jsilConfig.formatProgressText)
+      progressString = jsilConfig.formatProgressText(prefix, suffix, bytesLoaded, bytesTotal, progressString);
+
+    progressText.textContent = progressString;
     progressText.style.left = ((loadingProgress.clientWidth - progressText.clientWidth) / 2).toString() + "px";
     progressText.style.top = ((loadingProgress.clientHeight - progressText.clientHeight) / 2).toString() + "px";
   }
@@ -863,7 +868,12 @@ function generateHTML () {
     if (progressDiv === null) {
       progressDiv = document.createElement("div");
       progressDiv.id = "loadingProgress";
-      body.appendChild(progressDiv);
+
+      var progressContainer = body;
+      if (jsilConfig.getProgressContainer)
+        progressContainer = jsilConfig.getProgressContainer();
+
+      progressContainer.appendChild(progressDiv);
     }
 
     progressDiv.innerHTML = (
@@ -975,19 +985,23 @@ function onLoad () {
     var originalWidth = canvas.width;
     var originalHeight = canvas.height;
 
-    var reqFullscreen = canvas.requestFullScreenWithKeys || 
-      canvas.mozRequestFullScreenWithKeys ||
-      canvas.webkitRequestFullScreenWithKeys ||
-      canvas.requestFullscreen || 
-      canvas.requestFullScreen || 
-      canvas.mozRequestFullScreen || 
-      canvas.webkitRequestFullScreen;
+    var fullscreenElement = canvas;
+    if (jsilConfig.getFullscreenElement)
+      fullscreenElement = jsilConfig.getFullscreenElement();
+
+    var reqFullscreen = fullscreenElement.requestFullScreenWithKeys || 
+      fullscreenElement.mozRequestFullScreenWithKeys ||
+      fullscreenElement.webkitRequestFullScreenWithKeys ||
+      fullscreenElement.requestFullscreen || 
+      fullscreenElement.mozRequestFullScreen || 
+      fullscreenElement.webkitRequestFullScreen ||
+      null;
 
     if (reqFullscreen) {
       canGoFullscreen = true;
 
       var goFullscreen = function () {
-        reqFullscreen.call(canvas, Element.ALLOW_KEYBOARD_INPUT);
+        reqFullscreen.call(fullscreenElement, Element.ALLOW_KEYBOARD_INPUT);
       };
 
       var onFullscreenChange = function () {
@@ -995,6 +1009,10 @@ function onLoad () {
           document.fullScreen ||
           document.mozFullScreen || 
           document.webkitIsFullScreen ||
+          fullscreenElement.fullscreen || 
+          fullscreenElement.fullScreen ||
+          fullscreenElement.mozFullScreen || 
+          fullscreenElement.webkitIsFullScreen ||
           false;
 
         $jsilbrowserstate.isFullscreen = isFullscreen;
@@ -1012,12 +1030,13 @@ function onLoad () {
 
           canvas.width = ow * scaleRatio;
           canvas.height = oh * scaleRatio;
-
         } else {
           canvas.width = originalWidth;
           canvas.height = originalHeight;
-
         }
+
+        if (jsilConfig.onFullscreenChange)
+          jsilConfig.onFullscreenChange(isFullscreen);
       };
 
       document.addEventListener("fullscreenchange", onFullscreenChange, false);
