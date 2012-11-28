@@ -8,14 +8,14 @@
     <ProjectGuid>{8A1D7DD9-C44D-4593-A2AA-8A558550336E}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>JSIL-Binary</RootNamespace>
+    <RootNamespace>JSILBinary</RootNamespace>
     <AssemblyName>JSIL-Binary</AssemblyName>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>True</DebugSymbols>
+    <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
-    <Optimize>False</Optimize>
+    <Optimize>false</Optimize>
     <OutputPath>..\..\Bin\Debug\WebGL\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
@@ -23,14 +23,14 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
-    <Optimize>True</Optimize>
+    <Optimize>true</Optimize>
     <OutputPath>..\..\Bin\Release\WebGL\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug+Web|AnyCPU'">
-    <DebugSymbols>True</DebugSymbols>
+    <DebugSymbols>true</DebugSymbols>
     <OutputPath>..\..\Bin\Debug\WebGL\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <DebugType>full</DebugType>
@@ -45,14 +45,14 @@
     <CodeAnalysisIgnoreBuiltInRules>true</CodeAnalysisIgnoreBuiltInRules>
     <CodeAnalysisFailOnMissingRules>false</CodeAnalysisFailOnMissingRules>
     <WarningLevel>4</WarningLevel>
-    <Optimize>False</Optimize>
+    <Optimize>false</Optimize>
   </PropertyGroup>
   <ItemGroup>
     <Folder Include="Compiler\" />
   </ItemGroup>
   <Target Name="Build">
-  	<Exec Condition=" '$(OS)' != 'Windows_NT' " Command="rsync -a Scripts/*.* $(OutputPath)" />
-  	<Exec Condition=" '$(OS)' == 'Windows_NT' " Command="xcopy Scripts\*.* $(OutputPath) /D /E /C /Q /R /Y /K" />
+    <Exec Condition=" '$(OS)' != 'Windows_NT' " Command="rsync -a Scripts/*.* $(OutputPath)" />
+    <Exec Condition=" '$(OS)' == 'Windows_NT' " Command="xcopy Scripts\*.* $(OutputPath) /D /E /C /Q /R /Y /K" />
   </Target>
   <Target Name="Rebuild" DependsOnTargets="Build">
   </Target>
