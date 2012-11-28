@@ -852,121 +852,8 @@ JSIL.DeclareNamespace("JSIL.Dynamic");
 // Hack
 JSIL.DeclareNamespace("Property");
 
-// You can change these fields, but you shouldn't need to in practice
-JSIL.DeclareNamespace("JSIL.HostType", false);
-JSIL.HostType.IsBrowser = (typeof (window) !== "undefined") && (typeof (navigator) !== "undefined");
-
-// Redefine this class at runtime or override its members to change the behavior of JSIL builtins.
+// Implemented in JSIL.Host.js
 JSIL.DeclareNamespace("JSIL.Host", false);
-
-JSIL.Host.getCanvas = function () {
-  throw new Error("No canvas implementation");
-};
-
-if (typeof (console) !== "undefined") {
-  try {
-    JSIL.Host.logWrite = console.log.bind(console);
-  } catch (e) {
-    // IE :(
-    JSIL.Host.logWrite = function LogWrite_IE () {
-      console.log(Array.prototype.slice.call(arguments));
-    }
-  }
-} else if (JSIL.HostType.IsBrowser)
-  JSIL.Host.logWrite = function LogWrite_NoConsole () {};
-else if (typeof (putstr) === "function")
-  JSIL.Host.logWrite = putstr.bind(null);
-else
-  JSIL.Host.logWrite = print.bind(null);
-
-if (typeof (console) !== "undefined") {
-  try {
-    JSIL.Host.logWriteLine = console.log.bind(console);
-  } catch (e) {
-    // IE :(
-    JSIL.Host.logWriteLine = function LogWriteLine_IE () {
-      console.log(Array.prototype.slice.call(arguments));
-    }
-  }
-} else if (JSIL.HostType.IsBrowser)
-  JSIL.Host.logWriteLine = function LogWriteLine_NoConsole () {};
-else
-  JSIL.Host.logWriteLine = print.bind(null);
-
-if (typeof (console) !== "undefined") {
-  try {
-    JSIL.Host.warning = console.warn.bind(console);
-  } catch (e) {
-    // IE :(
-    JSIL.Host.warning = function Warning_IE () {
-      console.warn(Array.prototype.slice.call(arguments));
-    }
-  }
-} else
-  JSIL.Host.warning = JSIL.Host.logWriteLine;
-
-JSIL.Host.error = function (exception, text) {
-  if (typeof (console) !== "undefined") {
-    var rest = Array.prototype.slice.call(arguments, 1);
-    rest.push(exception);
-
-    var stack = null;
-    try {
-      stack = exception.stack;
-    } catch (e) {
-      stack = null;
-    }
-
-    if ((typeof (stack) !== "undefined") && (stack !== null)) {
-      if (stack.indexOf(String(exception)) >= 0)
-        rest.pop();
-
-      rest.push(stack);
-    }
-
-    Function.prototype.apply.call(console.error, console, rest);
-  }
-
-  JSIL.Host.throwException(exception);
-};
-
-JSIL.Host.throwException = function (e) {
-  throw e;
-};
-
-JSIL.Host.assertionFailed = function (message) {
-  JSIL.Host.error(new Error(message || "Assertion Failed"));
-};
-
-JSIL.Host.warnedAboutRunLater = false;
-JSIL.Host.pendingRunLaterItems = [];
-JSIL.Host.runLaterPending = false;
-JSIL.Host.runLaterCallback = function () {
-  JSIL.Host.runLaterPending = false;
-
-  var items = JSIL.Host.pendingRunLaterItems;
-  var count = items.length;
-
-  for (var i = 0; i < count; i++) {
-    var item = items[i];
-    item();
-  }
-
-  items.splice(0, count);
-};
-
-// This can fail to run the specified action if the host hasn't implemented it, so you should
-//  only use this to run performance improvements, not things you depend on
-JSIL.Host.runLater = function (action) {
-  if (typeof (setTimeout) === "function") {
-    JSIL.Host.pendingRunLaterItems.push(action);
-
-    if (!JSIL.Host.runLaterPending) {
-      JSIL.Host.runLaterPending = true;
-      setTimeout(JSIL.Host.runLaterCallback, 0);
-    }
-  }
-};
 
 JSIL.UnmaterializedReference = function (targetExpression) {
   JSIL.Host.error(new Error("A reference to expression '" + targetExpression + "' could not be translated."));
@@ -1131,7 +1018,9 @@ JSIL.ImplementExternals = function (namespaceName, externals) {
 
       var target = descriptor.Static ? publicInterface : publicInterface.prototype;
 
-      if (data.mangledName) {
+      if (typeof (data.constant) !== "undefined") {
+        obj[descriptor.EscapedName + "$constant"] = data.constant;
+      } else if (data.mangledName) {
         obj[descriptor.Static ? data.mangledName : prefix + data.mangledName] = [member, target[name]];
       }
     }
@@ -1145,22 +1034,6 @@ JSIL.ImplementExternals = function (namespaceName, externals) {
         obj[rawMethod.name + suffix] = [null, publicInterface[rawMethod.name]];
       } else {
         obj[prefix + rawMethod.name + suffix] = [null, publicInterface.prototype[rawMethod.name]];
-      }
-    }
-    
-    var constants = ib.constants;
-    for (var i = 0; i < constants.length; i++) {
-      var c = constants[i];
-      var decl = c[2];
-      var name = c[1];
-      var isStatic = c[0];
-
-      var suffix = "$constant";
-
-      if (isStatic) {
-        obj[name + suffix] = decl;
-      } else {
-        obj["instance$" + name + suffix] = decl;
       }
     }
   });
@@ -2542,8 +2415,6 @@ JSIL.$MakeComparerCore = function (typeObject, context, body) {
 
       if (fieldType.__IsNumeric__ || fieldType.__IsEnum__) {
         body.push("  if (" + JSIL.FormatMemberAccess("lhs", field.name) + " !== " + JSIL.FormatMemberAccess("rhs", field.name) + ")");
-      } else if (field.isStruct) {
-        body.push("  if (!" + JSIL.FormatMemberAccess("lhs", field.name) + ".Equals(" + JSIL.FormatMemberAccess("rhs", field.name) + "))");
       } else {
         body.push("  if (!JSIL.ObjectEquals(" + JSIL.FormatMemberAccess("lhs", field.name) + ", " + JSIL.FormatMemberAccess("rhs", field.name) + "))");
       }
@@ -3564,7 +3435,7 @@ JSIL.ApplyExternals = function (publicInterface, typeObject, fullName) {
     }
 
     if (key.indexOf(constantSuffix) > 0) {
-      Object.defineProperty(target, key.replace(constantSuffix, ""), externals[k]);
+      JSIL.SetValueProperty(target, key.replace(constantSuffix, ""), externals[k]);
       continue;
     }
 
@@ -3953,6 +3824,7 @@ JSIL.$ActuallyMakeCastMethods = function (publicInterface, typeObject, specialTy
 
     var createOverlay = function Overlay_IEnumerable (value) {
       if (JSIL.IsArray(value)) {
+        // FIXME: Detect correct type
         var tOverlay = JSIL.EnumerableArrayOverlay.Of(System.Object);
 
         return new tOverlay(value);
@@ -4807,8 +4679,6 @@ JSIL.InterfaceBuilder = function (context, typeObject, publicInterface) {
       return "<" + this.Name + " Descriptor>";
     }
   };
-  
-  this.constants = [];
 };
 
 JSIL.InterfaceBuilder.prototype.DefineTypeAliases = function (getAssembly, names) {
@@ -4928,16 +4798,16 @@ JSIL.InterfaceBuilder.prototype.ExternalMembers = function (isInstance /*, ...na
 JSIL.InterfaceBuilder.prototype.Constant = function (_descriptor, name, value) {
   var descriptor = this.ParseDescriptor(_descriptor, name);
 
-  var prop = {
-    configurable: true,
-    enumerable: true,
-    value: value,
-    writable: false
+  var data = {
+    constant: value
   };
 
-  Object.defineProperty(descriptor.Target, name, prop);
-  
-  this.constants.push([descriptor.Static, name, prop]);
+  var memberBuilder = new JSIL.MemberBuilder(this.context);
+  this.PushMember("FieldInfo", descriptor, data, memberBuilder.attributes);
+
+  JSIL.SetValueProperty(this.publicInterface, descriptor.EscapedName, value);
+
+  return memberBuilder;
 };
 
 JSIL.InterfaceBuilder.MakeProperty = function (typeShortName, name, target, methodSource, interfacePrefix) {
@@ -5493,12 +5363,12 @@ JSIL.MethodSignature.prototype.CallStatic = function (context, name, ga /*, ...p
   }
 };
 
-JSIL.MethodSignature.prototype.CallVirtual = function (name, ga, thisReference /*, ...parameters */) {
-  var key = this.GetKey(name);
+JSIL.MethodSignature.prototype.CallVirtual = function (escapedName, ga, thisReference /*, ...parameters */) {
+  var key = this.GetKey(escapedName);
 
   var method = thisReference[key];
   if (typeof (method) !== "function") {
-    var signature = this.toString(name);
+    var signature = this.toString(escapedName);
 
     throw new Error(
       "No method with signature '" + signature +
@@ -6509,10 +6379,11 @@ JSIL.ObjectEquals = function (lhs, rhs) {
       break;
 
     case "object":
-      var key = $equalsSignature.GetKey("Object.Equals");
+      var key = $equalsSignature.GetKey("Object_Equals");
+      var fn = lhs[key];
 
-      if (lhs[key])
-        return $equalsSignature.CallVirtual("Object.Equals", null, lhs, rhs);
+      if (fn)
+        return fn.call(lhs, rhs);
 
       break;
   }
