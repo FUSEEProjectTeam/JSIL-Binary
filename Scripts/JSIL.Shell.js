@@ -1,14 +1,37 @@
 "use strict";
 
-JSIL.Host.logWrite = function (text) {
+
+JSIL.DeclareNamespace("JSIL.Shell", false);
+
+
+JSIL.Shell.StdOutService = function () {
+};
+
+JSIL.Shell.StdOutService.prototype.write = function (text) {
   putstr(text);
 };
-JSIL.Host.logWriteLine = function (text) {
-  print(text);
+
+
+JSIL.Shell.StdErrService = function () {
 };
-JSIL.Host.throwException = function (e) {
-  throw e;
+
+JSIL.Shell.StdErrService.prototype.write = function (text) {
+  var trimmed = String(text).trim();
+  if (trimmed[trimmed.length - 1] === "\n") {
+    text = trimmed.substr(0, trimmed.length - 1);
+  }
+
+  printErr(text);
 };
+
+
+(function () {
+  JSIL.Host.registerServices({
+    stdout: new JSIL.Shell.StdOutService(),
+    stderr: new JSIL.Shell.StdErrService()
+  });
+})();
+
 
 function reportException (e) {
   var stack = "";
@@ -78,6 +101,7 @@ function shellStartup () {
 
   if (typeof (runMain) === "function") {
     JSIL.Initialize();
+    JSIL.Host.runInitCallbacks();
     runMain();
   }
 }

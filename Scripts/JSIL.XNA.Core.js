@@ -1051,10 +1051,30 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.GameComponentCollection", funct
 });
 
 JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
-  $.Method({Static: false, Public: true}, "ForceQuit", 
+  $.Method({Static: true, Public: true}, "ForceQuit", 
     new JSIL.MethodSignature(null, [], []), 
     function () {
       Microsoft.Xna.Framework.Game._QuitForced = true;
+    }
+  );
+
+  $.Method({Static: true, Public: true}, "ForcePause", 
+    new JSIL.MethodSignature(null, [], []), 
+    function () {
+      Microsoft.Xna.Framework.Game._PauseForced = true;
+    }
+  );
+
+  $.Method({Static: true, Public: true}, "ForceUnpause", 
+    new JSIL.MethodSignature(null, [], []), 
+    function () {
+      Microsoft.Xna.Framework.Game._PauseForced = false;
+
+      var ns = Microsoft.Xna.Framework.Game._NeedsStep;
+      Microsoft.Xna.Framework.Game._NeedsStep = null;
+
+      if (ns)
+        ns._QueueStep();
     }
   );
 
@@ -1080,15 +1100,6 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
       this._isDead = false;
       this.initialized = false;
 
-      if (typeof (Date.now) === "function") {
-        Object.defineProperty(this, "_GetNow", {
-          configurable: true,
-          enumerable: true,
-          value: Date.now
-        });
-      }
-
-      this._runHandle = null;
       this._gameTime = JSIL.CreateInstanceOfType(tGameTime, null);
       this._lastFrame = this._nextFrame = this._started = 0;
     }
@@ -1226,15 +1237,6 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
     return result;
   });
 
-  var cmp = function (lhs, rhs) {
-    if (lhs > rhs)
-      return 1;
-    else if (rhs > lhs)
-      return -1;
-    else
-      return 0;
-  };
-
   $.Method({Static:false, Public:false}, "Draw", 
     (new JSIL.MethodSignature(null, [$xnaasms[1].TypeRef("Microsoft.Xna.Framework.GameTime")], [])), 
     function Game_Draw (gameTime) {
@@ -1243,7 +1245,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
 
       var drawableComponents = this.$ComponentsOfType(Microsoft.Xna.Framework.IDrawable.__Type__);
       drawableComponents.sort(function (lhs, rhs) {
-        return cmp(lhs.get_DrawOrder(), rhs.get_DrawOrder());
+        return JSIL.CompareValues(lhs.get_DrawOrder(), rhs.get_DrawOrder());
       });
 
       for (var i = 0, l = drawableComponents.length; i < l; i++) {
@@ -1263,7 +1265,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
 
       var updateableComponents = this.$ComponentsOfType(Microsoft.Xna.Framework.IUpdateable.__Type__);
       updateableComponents.sort(function (lhs, rhs) {
-        return cmp(lhs.get_UpdateOrder(), rhs.get_UpdateOrder());
+        return JSIL.CompareValues(lhs.get_UpdateOrder(), rhs.get_UpdateOrder());
       });
 
       for (var i = 0, l = updateableComponents.length; i < l; i++) {
@@ -1289,14 +1291,6 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
     this._QueueStep();
   });
 
-  $.RawMethod(false, "_GetNow", function Game_GetNow () {
-    return (new Date()).getTime();
-  });
-
-  $.RawMethod(false, "_DeferCall", function Game_DeferCall (callback, lng) {
-    setTimeout(callback, 0);
-  });
-
   $.RawMethod(false, "_QueueStep", function Game_EnqueueTick () {
     if (Microsoft.Xna.Framework.Game._QuitForced || this._isDead) 
       return;
@@ -1304,60 +1298,71 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
     var self = this;
     var stepCallback = self._Step.bind(self);
 
-    var forceSetTimeout = false || 
-      (document.location.search.indexOf("forceSetTimeout") >= 0);
-
-    var requestAnimationFrame = window.requestAnimationFrame ||
-      window.mozRequestAnimationFrame || 
-      window.webkitRequestAnimationFrame ||
-      window.msRequestAnimationFrame ||
-      window.oRequestAnimationFrame;
-
-    if (requestAnimationFrame && !forceSetTimeout) {
-      requestAnimationFrame(stepCallback);
-    } else {
-      var shouldStepCallback = function ShouldStep () {
-        var now = self._GetNow();
-        var delay = self._nextFrame - now;
-
-        if (delay <= 0) 
-          stepCallback();
-        else 
-          self._DeferCall(shouldStepCallback, delay >= 3);
-      };
-
-      // It's important that we use setTimeout at least once after every frame in order to let the browser pump messages
-      this._DeferCall(shouldStepCallback, true);
-    }
+    JSIL.Host.scheduleTick(stepCallback);
   });
 
   $.RawMethod(false, "_TimedUpdate", function Game_TimedUpdate (longFrame) {
-    var updateStarted = this._GetNow();
+    // FIXME: We have to sample time in two different ways here.
+    // One is used for the framerate indicator, the other is used
+    //  to avoid frameskip after a really long update. We want the
+    //  frameskip suppression to be consistent in replay recording situations
+    //  but we want to display actual update perf when running a replay.
+
+    var updateActuallyStarted = JSIL.$GetHighResTime();
+    var updateStarted = JSIL.Host.getTickCount();
+
     this.Update(this._gameTime);
-    var updateEnded = this._GetNow();
+
+    var updateEnded = JSIL.Host.getTickCount();
+    var updateActuallyEnded = JSIL.$GetHighResTime();
 
     // Detect long updates and suppress frameskip.
     if ((updateEnded - updateStarted) > longFrame) {
       this.suppressFrameskip = true;
     }
     
-    this._updateCount += 1;
+    this._updateTimings.push(updateActuallyEnded - updateActuallyStarted);
+
+    var svc = JSIL.Host.getService("gameTiming", true);
+    if (svc)
+      svc.update(updateActuallyEnded - updateActuallyStarted);
+  });
+
+  $.RawMethod(false, "_MaybeReportFPS", function Game_MaybeReportFPS (now) {
+    var elapsed = now - this._lastFPSReport;
+    if (elapsed >= 250) {
+      this._ReportFPS(now);
+    }
   });
 
   $.RawMethod(false, "_ReportFPS", function Game_ReportFPS (now) {
-    this._lastSecond = now;
+    var maxTimingSamples = 60;
+
+    this._lastFPSReport = now;
+
+    // FIXME: Slower than necessary.
+
+    while (this._drawTimings.length > maxTimingSamples)
+      this._drawTimings.shift();
+
+    while (this._updateTimings.length > maxTimingSamples)
+      this._updateTimings.shift();
+
+    var updateTimeSum = 0, drawTimeSum = 0;
+
+    for (var i = 0, l = this._drawTimings.length; i < l; i++)
+      drawTimeSum += this._drawTimings[i];
+
+    for (var i = 0, l = this._updateTimings.length; i < l; i++)
+      updateTimeSum += this._updateTimings[i];
+
+    var updateTimeAverage = updateTimeSum / this._updateTimings.length;
+    var drawTimeAverage = drawTimeSum / this._drawTimings.length;
     
-    if (typeof (JSIL.Host.reportFps) === "function") {
-      var isWebGL = this.graphicsDeviceService.GraphicsDevice.context.isWebGL || false;
-      var cacheBytes = ($jsilxna.imageChannelCache.countBytes + $jsilxna.textCache.countBytes);
+    var isWebGL = this.graphicsDeviceService.GraphicsDevice.context.isWebGL || false;
+    var cacheBytes = ($jsilxna.imageChannelCache.countBytes + $jsilxna.textCache.countBytes);
 
-      JSIL.Host.reportFps(
-        this._drawCount, this._updateCount, 
-        cacheBytes, isWebGL
-      );
-    }
-
-    this._updateCount = this._drawCount = 0;
+    JSIL.Host.reportPerformance(drawTimeAverage, updateTimeAverage, cacheBytes, isWebGL);
   });
 
   $.RawMethod(false, "_FixedTimeStep", function Game_FixedTimeStep (
@@ -1415,6 +1420,8 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
   });
 
   $.RawMethod(false, "_RenderAFrame", function Game_RenderAFrame () {
+    var started = JSIL.$GetHighResTime();
+
     var device = this.get_GraphicsDevice();
 
     device.$UpdateViewport();      
@@ -1422,11 +1429,18 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
 
     this.Draw(this._gameTime);
 
-    this._drawCount += 1;
+    var ended = JSIL.$GetHighResTime();
+
+    this._drawTimings.push(ended - started);
+
+    var svc = JSIL.Host.getService("gameTiming", true);
+    if (svc)
+      svc.draw(ended - started);
   });
 
   $.RawMethod(false, "_Step", function Game_Step () {
-    var now = this._GetNow();
+    var now = JSIL.Host.getTickCount();
+    var actualNow = JSIL.$GetHighResTime();
 
     var frameDelay = this.targetElapsedTime.get_TotalMilliseconds();
     if (frameDelay <= 0)
@@ -1436,8 +1450,9 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
       var elapsed = frameDelay;
       var total = 0;
       this._started = now;
-      this._lastSecond = now;
-      this._updateCount = this._drawCount = 0;
+      this._lastFPSReport = actualNow;
+      this._updateTimings = [];
+      this._drawTimings = [];
       this._extraTime = 0;
       this.suppressFrameskip = true;
     } else {
@@ -1445,12 +1460,10 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
       var total = now - this._started;
     }
 
-    if ((now - this._lastSecond) > 1000) {
-      this._ReportFPS(now);
+    this._MaybeReportFPS(actualNow);
 
-      $jsilxna.imageChannelCache.maybeEvictItems();
-      $jsilxna.textCache.maybeEvictItems();
-    }
+    $jsilxna.imageChannelCache.maybeEvictItems();
+    $jsilxna.textCache.maybeEvictItems();
 
     if (this.forceElapsedTimeToZero) {
       this.forceElapsedTimeToZero = false;
@@ -1469,9 +1482,14 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
     if (this._balanceFPSCheckbox)
       this._profilingMode = !this._balanceFPSCheckbox.checked;
 
-    var failed = true;
-    try {
+    // Isolate the try block into its own function since it will be running in the interpreter
+    this._TimeStep(elapsed, frameDelay, millisecondInTicks, maxElapsedTimeMs, longFrame);
+  });
 
+  $.RawMethod(false, "_TimeStep", function Game_TimeStep (elapsed, frameDelay, millisecondInTicks, maxElapsedTimeMs, longFrame) {
+    var failed = true;
+
+    try {
       if (this.isFixedTimeStep && !this.suppressFrameskip && !this._profilingMode) {
         this._FixedTimeStep(elapsed, frameDelay, millisecondInTicks, maxElapsedTimeMs, longFrame);
       } else {
@@ -1482,10 +1500,13 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
 
       failed = false;
     } finally {
-      if (failed || Microsoft.Xna.Framework.Game._QuitForced) 
+      if (failed || Microsoft.Xna.Framework.Game._QuitForced) {
         this.Exit();
-      else 
+      } else if (Microsoft.Xna.Framework.Game._PauseForced) {
+        Microsoft.Xna.Framework.Game._NeedsStep = this;
+      } else {
         this._QueueStep();
+      }
     }
   });
 
@@ -1500,10 +1521,6 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
     Static: false,
     Public: true
   }, "Dispose", new JSIL.MethodSignature(null, [], []), function () {
-    if (this._runHandle !== null) 
-      window.clearInterval(this._runHandle);
-
-    this._runHandle = null;
     this.UnloadContent();
 
     this._isDead = true;
@@ -2376,16 +2393,7 @@ $jsilxna.ClampByte = function (v) {
   if (v < 0) return 0;
   else if (v > 255) return 255;
   else return Math.floor(v);
-}
-
-JSIL.ImplementExternals("Microsoft.Xna.Framework.Storage.StorageContainer", function ($) {
-  $.Method({
-    Static: false,
-    Public: true
-  }, "get_TitleLocation", new JSIL.MethodSignature(null, [], []), function () {
-    return JSIL.Host.getRootDirectory();
-  });
-});
+};
 
 (function () {
   // XNA3 doesn't have a BlendState class, so we substitute one.

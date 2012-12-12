@@ -13,6 +13,8 @@ if (typeof (jsilConfig) === "undefined") {
 
 JSIL.SuppressInterfaceWarnings = true;
 JSIL.ReadOnlyPropertyWriteWarnings = false;
+JSIL.ThrowOnUnimplementedExternals = false;
+JSIL.ThrowOnStaticCctorError = false;
 
 JSIL.GlobalNamespace = this;
 
@@ -648,7 +650,7 @@ JSIL.GetLocalName = function (name) {
 
 JSIL.SplitName = function (name) {
   if (typeof (name) !== "string")
-    JSIL.Host.error(new Error("Not a name: " + name));
+    JSIL.Host.abort(new Error("Not a name: " + name));
 
   var escapedName = name.replace(JSIL.AngleGroupRegex, function (match, group1) {
     return "$l" + group1.replace(JSIL.UnderscoreRegex, "_") + "$g";
@@ -856,52 +858,70 @@ JSIL.DeclareNamespace("Property");
 JSIL.DeclareNamespace("JSIL.Host", false);
 
 JSIL.UnmaterializedReference = function (targetExpression) {
-  JSIL.Host.error(new Error("A reference to expression '" + targetExpression + "' could not be translated."));
+  JSIL.Host.abort(new Error("A reference to expression '" + targetExpression + "' could not be translated."));
 };
 
 JSIL.UntranslatableNode = function (nodeType) {
-  JSIL.Host.error(new Error("An ILAst node of type " + nodeType + " could not be translated."));
+  JSIL.Host.abort(new Error("An ILAst node of type " + nodeType + " could not be translated."));
 };
 
 JSIL.UntranslatableFunction = function (functionName) {
   return function UntranslatableFunctionInvoked () {
-    JSIL.Host.error(new Error("The function '" + functionName + "' could not be translated."));
+    JSIL.Host.abort(new Error("The function '" + functionName + "' could not be translated."));
   };
 };
 
 JSIL.UntranslatableInstruction = function (instruction, operand) {
   if (typeof (operand) !== "undefined")
-    JSIL.Host.error(new Error("A MSIL instruction of type " + instruction + " with an operand of type " + operand + " could not be translated."));
+    JSIL.Host.abort(new Error("A MSIL instruction of type " + instruction + " with an operand of type " + operand + " could not be translated."));
   else
-    JSIL.Host.error(new Error("A MSIL instruction of type " + instruction + " could not be translated."));
+    JSIL.Host.abort(new Error("A MSIL instruction of type " + instruction + " could not be translated."));
 };
 
 JSIL.IgnoredMember = function (memberName) {
-  JSIL.Host.error(new Error("An attempt was made to reference the member '" + memberName + "', but it was explicitly ignored during translation."));
+  JSIL.Host.abort(new Error("An attempt was made to reference the member '" + memberName + "', but it was explicitly ignored during translation."));
 };
 
 JSIL.UnknownMember = function (memberName) {
-  JSIL.Host.error(new Error("An attempt was made to reference the member '" + memberName + "', but it has no type information."));
+  JSIL.Host.abort(new Error("An attempt was made to reference the member '" + memberName + "', but it has no type information."));
 };
 
 JSIL.MakeExternalMemberStub = function (namespaceName, getMemberName, inheritedMember) {
   var state = {
-    alreadyWarned: false
+    warningCount: 0
   };
 
   var result;
   if (typeof (inheritedMember) === "function") {
     result = function ExternalMemberStub () {
-      if (!state.alreadyWarned) {
+      if (state.warningCount < 1) {
         JSIL.Host.warning("The external method '" + getMemberName() + "' of type '" + namespaceName + "' has not been implemented; calling inherited method.");
-        state.alreadyWarned = true;
+        state.warningCount += 1;
       }
 
       return Function.prototype.apply.call(inheritedMember, this, arguments);
     };
   } else {
     result = function ExternalMemberStub () {
-      JSIL.Host.error(new Error("The external method '" + getMemberName() + "' of type '" + namespaceName + "' has not been implemented."));
+      if (state.warningCount > 3)
+        return;
+
+      state.warningCount += 1;
+      var msg = "The external method '" + getMemberName() + "' of type '" + namespaceName + "' has not been implemented.";
+      var err = new Error(msg);
+
+      if (JSIL.ThrowOnUnimplementedExternals) {
+        JSIL.Host.abort(err);
+      } else {
+        if (typeof (err.stack) !== "undefined") {
+          if (err.stack.indexOf(err.toString()) === 0)
+            msg = err.stack;
+          else
+            msg += "\n" + err.stack;
+        }
+
+        JSIL.Host.warning(msg);
+      }
     };
   }
 
@@ -955,7 +975,7 @@ JSIL.RawMethodRecord = function (name, isStatic) {
 
 JSIL.ImplementExternals = function (namespaceName, externals) {
   if (typeof (namespaceName) !== "string") {
-    JSIL.Host.error(new Error("ImplementExternals expected name of namespace"));
+    JSIL.Host.abort(new Error("ImplementExternals expected name of namespace"));
     return;
   }
 
@@ -974,7 +994,7 @@ JSIL.ImplementExternals = function (namespaceName, externals) {
   }
 
   if (obj.__IsInitialized__) {
-    JSIL.Host.error(new Error("Type '" + namespaceName + "' already initialized"));
+    JSIL.Host.abort(new Error("Type '" + namespaceName + "' already initialized"));
     return;
   }
 
@@ -1138,7 +1158,7 @@ JSIL.TypeRef = function (context, name, genericArguments) {
       this.genericArguments = genericArguments || [];
       this.cachedReference = null;
     } else {
-      JSIL.Host.error(new Error("Invalid type reference"), context, name);
+      JSIL.Host.abort(new Error("Invalid type reference: " + name + " in context " + context));
     }
   }
 
@@ -1295,7 +1315,7 @@ JSIL.RegisterName = function (name, privateNamespace, isPublic, creator, initial
 
           state.value = result;
         } catch (exc) {
-          JSIL.Host.error(exc);
+          JSIL.Host.abort(exc);
         } finally {
           state.creator = null;
           state.constructing = false;
@@ -1317,7 +1337,7 @@ JSIL.RegisterName = function (name, privateNamespace, isPublic, creator, initial
         try {
           ifn(result);
         } catch (exc) {
-          JSIL.Host.error(exc);
+          JSIL.Host.abort(exc);
         } finally {
           state.initializer = null;
           state.constructing = false;
@@ -2560,14 +2580,7 @@ JSIL.$BuildFieldList = function (typeObject) {
   }
 
   // Sort fields by name so that we get a predictable initialization order.
-  fl.sort(function (lhs, rhs) {
-    if (lhs > rhs)
-      return 1;
-    else if (lhs < rhs)
-      return -1;
-    else
-      return 0;
-  })
+  fl.sort(JSIL.CompareValues)
 
   return fl;
 };
@@ -3337,7 +3350,12 @@ JSIL.RunStaticConstructors = function (classObject, typeObject) {
       try {
         cctor.call(classObject);
       } catch (e) {
-        JSIL.Host.error(e, "Unhandled exception in static constructor for type " + JSIL.GetTypeName(typeObject) + ": ");
+        if (JSIL.ThrowOnStaticCctorError) {
+          JSIL.Host.abort(e, "Unhandled exception in static constructor for type " + JSIL.GetTypeName(typeObject) + ": ");
+        } else {
+          JSIL.Host.warning("Unhandled exception in static constructor for type " + JSIL.GetTypeName(typeObject) + ":");
+          JSIL.Host.warning(e);
+        }
       }
     }
   }
@@ -3368,7 +3386,7 @@ JSIL.InitializeFields = function (classObject, typeObject) {
 }
 
 JSIL.ShadowedTypeWarning = function (fullName) {
-  JSIL.Host.error(new Error("Type " + fullName + " is shadowed by another type of the same name."));
+  JSIL.Host.abort(new Error("Type " + fullName + " is shadowed by another type of the same name."));
 };
 
 JSIL.DuplicateDefinitionWarning = function (fullName, isPublic, definedWhere, inAssembly) {
@@ -3381,7 +3399,7 @@ JSIL.DuplicateDefinitionWarning = function (fullName, isPublic, definedWhere, in
     message += definedWhere.join("\r\n  ");
   }
 
-  JSIL.Host.error(new Error(message));
+  JSIL.Host.abort(new Error(message));
 };
 
 JSIL.GetFunctionName = function (fn) {
@@ -3472,7 +3490,7 @@ JSIL.ApplyExternals = function (publicInterface, typeObject, fullName) {
 
 JSIL.MakeExternalType = function (fullName, isPublic) {
   if (typeof (isPublic) === "undefined")
-    JSIL.Host.error(new Error("Must specify isPublic"));
+    JSIL.Host.abort(new Error("Must specify isPublic"));
 
   var assembly = $private;
 
@@ -3483,7 +3501,7 @@ JSIL.MakeExternalType = function (fullName, isPublic) {
     if (state.hasValue)
       return state.value;
     else
-      JSIL.Host.error(new Error("The external type '" + fullName + "' has not been implemented."));
+      JSIL.Host.abort(new Error("The external type '" + fullName + "' has not been implemented."));
   };
   var setter = function SetExternalType (newValue) {
     state.value = newValue;
@@ -3538,7 +3556,7 @@ $jsilcore.$GetRuntimeType = function (context, forTypeName) {
 
 JSIL.MakeStaticClass = function (fullName, isPublic, genericArguments, initializer) {
   if (typeof (isPublic) === "undefined")
-    JSIL.Host.error(new Error("Must specify isPublic"));
+    JSIL.Host.abort(new Error("Must specify isPublic"));
 
   var assembly = $private;
   var localName = JSIL.GetLocalName(fullName);
@@ -4001,7 +4019,7 @@ JSIL.MakeTypeConstructor = function (typeObject) {
 
 JSIL.MakeType = function (baseType, fullName, isReferenceType, isPublic, genericArguments, initializer) {
   if (typeof (isPublic) === "undefined")
-    JSIL.Host.error(new Error("Must specify isPublic"));
+    JSIL.Host.abort(new Error("Must specify isPublic"));
 
   var assembly = $private;
   var localName = JSIL.GetLocalName(fullName);
@@ -4603,7 +4621,10 @@ JSIL.$BindGenericMethod = function (outerThis, body, methodName, genericArgument
   };
 
   result.apply = function BoundGenericMethod_Apply (thisReference, invokeArguments) {
-    invokeArguments = genericArguments.concat(invokeArguments);
+    // This value might be an Arguments object instead of an array.
+    invokeArguments = genericArguments.concat(
+      Array.prototype.slice.call(invokeArguments)
+    );
     return body.apply(thisReference, invokeArguments);
   };
 
@@ -4806,7 +4827,6 @@ JSIL.InterfaceBuilder.prototype.Constant = function (_descriptor, name, value) {
   this.PushMember("FieldInfo", descriptor, data, memberBuilder.attributes);
 
   JSIL.SetValueProperty(this.publicInterface, descriptor.EscapedName, value);
-
   return memberBuilder;
 };
 
@@ -6301,6 +6321,8 @@ JSIL.MakeDelegate = function (fullName, isPublic, genericArguments) {
 
         if (method.__ThisType__ === typeObject)
           return method;
+        else
+          throw new Error("Single delegate argument passed to Delegate.New, but types don't match");
       }
 
       if (typeof (method) !== "function") {
@@ -6310,17 +6332,16 @@ JSIL.MakeDelegate = function (fullName, isPublic, genericArguments) {
       if (method.__IsMembrane__)
         method = method.__Unwrap__();
 
-      var resultDelegate = method.bind(object);
-      var self = this;
+      var resultDelegate = function Delegate_Invoke () {
+        return method.apply(object, arguments);
+      };
 
-      JSIL.SetValueProperty(resultDelegate, "__ThisType__", self.__Type__);
-
+      JSIL.SetValueProperty(resultDelegate, "__ThisType__", this.__Type__);
       JSIL.SetValueProperty(resultDelegate, "toString", toStringImpl);
+      JSIL.SetValueProperty(resultDelegate, "__object__", object);
+      JSIL.SetValueProperty(resultDelegate, "__method__", method);
+      JSIL.SetValueProperty(resultDelegate, "__isMulticast__", false);
 
-      resultDelegate.__object__ = object;
-      resultDelegate.__method__ = method;
-
-      Object.seal(resultDelegate);
       return resultDelegate;
     });
 

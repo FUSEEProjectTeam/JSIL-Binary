@@ -277,49 +277,48 @@ JSIL.MakeClass("System.ComponentModel.TypeConverter", "System.ComponentModel.Exp
 $jsilcore.$GetInvocationList = function (delegate) {
   if (delegate === null) {
     return [ ];
-  } else if (typeof (delegate.GetInvocationList) === "function") {
-    return delegate.GetInvocationList();
+  } else if (typeof (delegate.__delegates__) !== "undefined") {
+    return delegate.__delegates__;
   } else if (typeof (delegate) === "function") {
     return [ delegate ];
   } else {
     return null;
   }
 };
+$jsilcore.$CompareSinglecastDelegate = function (lhs, rhs) {
+  if (lhs.__object__ !== rhs.__object__)
+    return false;
+
+  if (lhs.__method__ !== rhs.__method__)
+    return false;
+
+  return true;
+};
+$jsilcore.$CompareMulticastDelegate = function (lhs, rhs) {
+  var lhsInvocationList = $jsilcore.$GetInvocationList(lhs);
+  var rhsInvocationList = $jsilcore.$GetInvocationList(rhs);
+
+  if (lhsInvocationList.length !== rhsInvocationList.length)
+    return false;
+
+  for (var i = 0, l = lhsInvocationList.length; i < l; i++) {
+    if (!$jsilcore.$AreDelegatesEqual(lhsInvocationList[i], rhsInvocationList[i]))
+      return false;
+  }
+
+  return true;
+};
 $jsilcore.$AreDelegatesEqual = function (lhs, rhs) {
   if (lhs === rhs)
     return true;
 
-  var lhsInvocationList = $jsilcore.$GetInvocationList(lhs);
-  var rhsInvocationList = $jsilcore.$GetInvocationList(rhs);
-
-  if (lhsInvocationList === rhsInvocationList)
-    return true;
-
-  if (!JSIL.IsArray(lhsInvocationList))
-    return false;
-  if (!JSIL.IsArray(rhsInvocationList))
-    return false;
-
-  if (lhsInvocationList.length != rhsInvocationList.length)
-    return false;
-
-  if (lhsInvocationList.length === 1) {
-    var lhsDelegate = lhsInvocationList[0];
-    var rhsDelegate = rhsInvocationList[0];
-
-    if (lhsDelegate.__object__ !== rhsDelegate.__object__)
-      return false;
-
-    if (lhsDelegate.__method__ !== rhsDelegate.__method__)
-      return false;
-  } else {
-    for (var i = 0, l = lhsInvocationList.length; i < l; i++) {
-      if (!$jsilcore.$AreDelegatesEqual(lhsInvocationList[i], rhsInvocationList[i]))
-        return false;
-    }
-  }
-
-  return true;
+  var singleMethod, otherMethod;
+  if (!lhs.__isMulticast__)
+    return $jsilcore.$CompareSinglecastDelegate(lhs, rhs);
+  else if (!rhs.__isMulticast__)
+    return $jsilcore.$CompareSinglecastDelegate(rhs, lhs);
+  else
+    return $jsilcore.$CompareMulticastDelegate(lhs, rhs);
 };
 $jsilcore.$CombineDelegates = function (lhs, rhs) {
   if (rhs === null) {
@@ -384,13 +383,13 @@ JSIL.ImplementExternals("System.Delegate", function ($) {
       var impl = context[key];
 
       if (typeof (impl) !== "function") {
-        JSIL.Host.error(new Error("Failed to bind delegate: Method '" + key + "' not found in context"));
+        JSIL.Host.abort(new Error("Failed to bind delegate: Method '" + key + "' not found in context"));
       }
 
       var delegatePublicInterface = delegateType.__PublicInterface__;
 
       if (typeof (delegatePublicInterface.New) !== "function") {
-        JSIL.Host.error(new Error("Invalid delegate type"));
+        JSIL.Host.abort(new Error("Invalid delegate type"));
       }
 
       return delegatePublicInterface.New(firstArgument, impl);
@@ -428,7 +427,7 @@ JSIL.ImplementExternals("System.MulticastDelegate", function ($) {
   $.Method({Static:false, Public:true }, "GetInvocationList", 
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.Array", [$jsilcore.TypeRef("System.Delegate")]), [], [])), 
     function GetInvocationList () {
-      return this.delegates;
+      return this.__delegates__;
     }
   );
 });
@@ -437,20 +436,27 @@ JSIL.MakeClass("System.Object", "System.Delegate", true, []);
 JSIL.MakeClass("System.Object", "System.MulticastDelegate", true, []);
 
 JSIL.MulticastDelegate.New = function (delegates) {
-  var invoker = function () {
+  var delegatesCopy = Array.prototype.slice.call(delegates);
+  var delegateCount = delegates.length;
+
+  var resultDelegate = function MulticastDelegate_Invoke () {
     var result;
-    for (var i = 0, l = this.length; i < l; i++) {
-      var d = this[i];
-      result = d.apply(null, arguments);
+
+    for (var i = 0; i < delegateCount; i++) {
+      var d = delegatesCopy[i];
+      // FIXME: bind, call and apply suck
+      result = d.apply(d.__object__ || null, arguments);
     }
+
     return result;
   };
 
-  var result = invoker.bind(delegates);
-  result.delegates = delegates;
-  result.__proto__ = System.MulticastDelegate.prototype;
-  Object.seal(result);
-  return result;
+  JSIL.SetValueProperty(resultDelegate, "__delegates__", delegatesCopy);
+  JSIL.SetValueProperty(resultDelegate, "__isMulticast__", true);
+  JSIL.SetValueProperty(resultDelegate, "__ThisType__", delegates[0].__ThisType__);
+  JSIL.SetValueProperty(resultDelegate, "toString", delegates[0].toString);
+
+  return resultDelegate;
 };
 
 JSIL.MakeDelegate("System.Action", true, []);
@@ -1130,7 +1136,7 @@ $jsilcore.$ListExternals = function ($, T, type) {
   $.Method({Static:false, Public:true }, "Sort", 
     new JSIL.MethodSignature(null, [], []),
     function () {
-      this._items.sort();
+      this._items.sort(JSIL.CompareValues);
     }
   );
 
@@ -1566,46 +1572,53 @@ JSIL.MakeStaticClass("System.Threading.Interlocked", true, [], function ($) {
     new JSIL.MethodSignature("!!0", [JSIL.Reference.Of("!!0"), "!!0", "!!0"], ["T"])
   );
 });
+
 JSIL.MakeStaticClass("System.Threading.Monitor", true, []);
 
 JSIL.ImplementExternals("System.Random", function ($) {
   $.Method({Static:false, Public:true }, ".ctor", 
     (new JSIL.MethodSignature(null, [], [])), 
     function _ctor () {
+      this.mt = new MersenneTwister();
     }
   );
 
   $.Method({Static:false, Public:true }, ".ctor", 
     (new JSIL.MethodSignature(null, [$.Int32], [])), 
     function _ctor (Seed) {
-      JSIL.Host.warning("Cannot seed the JS random number generator.");
+      this.mt = new MersenneTwister(Seed);
     }
   );
 
   $.Method({Static:false, Public:true }, "Next", 
     (new JSIL.MethodSignature($.Int32, [], [])), 
     function Next () {
-      return Math.floor(Math.random() * Int32.MaxValue);
+      var unsigned32 = this.mt.genrand_int32();
+      return unsigned32 << 0;
     }
   );
 
   $.Method({Static:false, Public:true }, "Next", 
     (new JSIL.MethodSignature($.Int32, [$.Int32, $.Int32], [])), 
     function Next (minValue, maxValue) {
-      return Math.floor(Math.random() * (maxValue - minValue)) + minValue;
+      var real = this.mt.genrand_real1();
+      return Math.floor(real * (maxValue - minValue)) + minValue;
     }
   );
 
   $.Method({Static:false, Public:true }, "Next", 
     (new JSIL.MethodSignature($.Int32, [$.Int32], [])), 
     function Next (maxValue) {
-      return Math.floor(Math.random() * maxValue);
+      var real = this.mt.genrand_real1();
+      return Math.floor(real * maxValue);
     }
   );
 
   $.Method({Static:false, Public:true }, "NextDouble", 
     (new JSIL.MethodSignature($.Double, [], [])), 
-    Math.random
+    function NextDouble () {
+      return this.mt.genrand_real1();
+    }
   );
 });
 
@@ -1811,9 +1824,6 @@ JSIL.MakeStruct("System.ValueType", "System.Decimal", true, [], function ($) {
 });
 
 JSIL.ImplementExternals("System.Environment", function ($) {
-  // HACK
-  var tickCountOffset = Date.now();
-
   $.Method({Static:true , Public:true }, "GetFolderPath", 
     (new JSIL.MethodSignature($.String, [$jsilcore.TypeRef("System.Environment/SpecialFolder")], [])), 
     function GetFolderPath (folder) {
@@ -1833,7 +1843,7 @@ JSIL.ImplementExternals("System.Environment", function ($) {
   $.Method({Static:true , Public:true }, "get_TickCount", 
     (new JSIL.MethodSignature($.Int32, [], [])), 
     function get_TickCount () {
-      return (Date.now() - tickCountOffset) | 0;
+      return JSIL.Host.getTickCount() | 0;
     }
   );
 
@@ -2779,7 +2789,7 @@ JSIL.ImplementExternals("System.Diagnostics.Stopwatch", function ($) {
     function get_ElapsedMilliseconds () {
       var result = this.elapsed;
       if (this.isRunning)
-        result += Date.now() - this.startedWhen;
+        result += JSIL.Host.getTickCount() - this.startedWhen;
 
       return $jsilcore.System.Int64.FromNumber(result);
     }
@@ -2790,7 +2800,7 @@ JSIL.ImplementExternals("System.Diagnostics.Stopwatch", function ($) {
     function get_ElapsedTicks () {
       var result = this.elapsed;
       if (this.isRunning)
-        result += Date.now() - this.startedWhen;
+        result += JSIL.Host.getTickCount() - this.startedWhen;
 
       result *= 10000;
 
@@ -2819,7 +2829,7 @@ JSIL.ImplementExternals("System.Diagnostics.Stopwatch", function ($) {
     function Restart () {
       this.elapsed = 0;
       this.isRunning = true;
-      this.startedWhen = Date.now();
+      this.startedWhen = JSIL.Host.getTickCount();
     }
   );
 
@@ -2827,7 +2837,7 @@ JSIL.ImplementExternals("System.Diagnostics.Stopwatch", function ($) {
     (new JSIL.MethodSignature(null, [], [])), 
     function Start () {
       if (!this.isRunning) {
-        this.startedWhen = Date.now();
+        this.startedWhen = JSIL.Host.getTickCount();
         this.isRunning = true;
       }
     }
@@ -2848,7 +2858,7 @@ JSIL.ImplementExternals("System.Diagnostics.Stopwatch", function ($) {
       if (this.isRunning) {
         this.isRunning = false;
 
-        var now = Date.now();
+        var now = JSIL.Host.getTickCount();
         var elapsed = now - this.startedWhen;
 
         this.elapsed += elapsed;
@@ -2898,24 +2908,9 @@ JSIL.MakeEnum(
 );
 
 JSIL.ImplementExternals("System.GC", function ($) {
-  var warnedAboutMemory = false;
-
-  var warnIfNecessary = function () {
-    if (warnedAboutMemory)
-      return;
-
-    warnedAboutMemory = true;
-
-    JSIL.Host.warning("WARNING: JS heap memory statistics not available in your browser.");
-  };
-
   var getMemoryImpl = function () {
-    if (window && window.performance && window.performance.memory) {
-      return window.performance.memory.usedJSHeapSize;
-    } else {
-      warnIfNecessary();
-      return 0;
-    }
+    var svc = JSIL.Host.getService("window");
+    return svc.getPerformanceUsedJSHeapSize();
   };
 
   $.Method({Static:true , Public:false}, "GetTotalMemory", 

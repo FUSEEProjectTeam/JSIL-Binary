@@ -168,7 +168,7 @@ function loadNullSound (audioInfo, filename, data, onError, onDoneLoading) {
 
 function loadWebkitSound (audioInfo, filename, data, onError, onDoneLoading) {
   var handleError = function (text) {
-    JSIL.Host.error(text);
+    JSIL.Host.abort(new Error("Error while loading '" + filename + "': " + text));
     return loadNullSound(audioInfo, filename, data, onError, onDoneLoading);
   };
 
@@ -206,7 +206,7 @@ function loadWebkitSound (audioInfo, filename, data, onError, onDoneLoading) {
 
 function loadStreamingSound (audioInfo, filename, data, onError, onDoneLoading) {
   var handleError = function (text) {
-    JSIL.Host.error(text);
+    JSIL.Host.abort(new Error(text));
     return loadNullSound(audioInfo, filename, data, onError, onDoneLoading);
   };
 
@@ -235,7 +235,7 @@ function loadStreamingSound (audioInfo, filename, data, onError, onDoneLoading) 
 
 function loadBufferedHTML5Sound (audioInfo, filename, data, onError, onDoneLoading) {
   var handleError = function (text) {
-    JSIL.Host.error(text);
+    JSIL.Host.abort(new Error(text));
     return loadNullSound(audioInfo, filename, data, onError, onDoneLoading);
   };
 
@@ -277,7 +277,7 @@ function loadBufferedHTML5Sound (audioInfo, filename, data, onError, onDoneLoadi
 
 function loadHTML5Sound (audioInfo, filename, data, onError, onDoneLoading) {
   var handleError = function (text) {
-    JSIL.Host.error(text);
+    JSIL.Host.abort(new Error(text));
     return loadNullSound(audioInfo, filename, data, onError, onDoneLoading);
   };
 
@@ -326,7 +326,7 @@ function initSoundLoader () {
   audioInfo.hasAudioContext = typeof (audioContextCtor) === "function";
   audioInfo.audioContext = null;
   audioInfo.testAudioInstance = null;
-  audioInfo.disableSound = window.location.search.indexOf("noSound") >= 0;
+  audioInfo.disableSound = jsilConfig.disableSound;
 
   try {
     audioInfo.testAudioInstance = document.createElement("audio");

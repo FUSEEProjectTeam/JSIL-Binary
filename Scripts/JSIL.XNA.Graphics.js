@@ -136,7 +136,7 @@ $jsilxna.get2DContext = function (canvas, enableWebGL) {
   ) {
     if (!$jsilxna.testedWebGL) {
       try {
-        var testCanvas = document.createElement("canvas");
+        var testCanvas = JSIL.Host.createCanvas(320, 240);
         WebGL2D.enable(testCanvas);
         var testContext = testCanvas.getContext("webgl-2d");
 
@@ -195,11 +195,8 @@ $jsilxna.imageChannels = function (image) {
   this.sizeBytes = (this.width * this.height * 4) * 4;
 
   var createChannel = (function (ch) {
-    var canvas = this[ch] = document.createElement("canvas");
+    var canvas = this[ch] = JSIL.Host.createCanvas(this.width + 2, this.height + 2);
     var context = this[ch + "Context"] = $jsilxna.get2DContext(canvas, false);
-
-    canvas.width = this.width + 2;
-    canvas.height = this.height + 2;
 
     context.globalCompositeOperation = "copy";
     context.globalCompositeAlpha = 1.0;
@@ -315,11 +312,8 @@ $jsilxna.getImageTopLeftPixel = function (image) {
   if (typeof (cached) === "string") 
     return cached;
 
-  var canvas = document.createElement("canvas");
+  var canvas = JSIL.Host.createCanvas(1, 1);
   var context = $jsilxna.get2DContext(canvas, false);
-
-  canvas.width = 1;
-  canvas.height = 1;
 
   var imageData;
   if (image.tagName.toLowerCase() === "canvas") {
@@ -1853,7 +1847,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.GraphicsDevice", funct
         return;
 
       warnedTypes[ptype] = true;
-      JSIL.Host.error(new Error("The primitive type " + ptype + " is not implemented."));
+      JSIL.Host.abort(new Error("The primitive type " + ptype + " is not implemented."));
       return;
     }
   });
@@ -2188,7 +2182,10 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.SpriteFont", function 
         var cropRect = this.croppingData.get_Item(charIndex);
 
         characterCallback(
-          glyphRect, positionX, positionY, cropRect.X, cropRect.Y, lineIndex
+          ch, glyphRect, 
+          positionX, positionY, 
+          cropRect.X, cropRect.Y, 
+          lineIndex
         );
 
         positionX += glyphWidth;
@@ -2238,13 +2235,13 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.SpriteFont", function 
         else 
           tColor = $xnaasms.xna.Microsoft.Xna.Framework.Graphics.Color;
 
-        var tempCanvas = document.createElement("canvas");
+        var tempCanvas = JSIL.Host.createCanvas(
+          Math.ceil(measured.X + xPad + xPad),
+          Math.ceil(measured.Y + yPad + yPad)
+        );
         var tempSpriteBatch = JSIL.CreateInstanceOfType(tSpriteBatch, "$cloneExisting", [spriteBatch]);
         // Force the isWebGL flag to false since the temporary canvas isn't using webgl-2d
         tempSpriteBatch.isWebGL = false;
-
-        tempCanvas.width = Math.ceil(measured.X + xPad + xPad);
-        tempCanvas.height = Math.ceil(measured.Y + yPad + yPad);
 
         // FIXME: Terrible hack
         tempSpriteBatch.device = {
@@ -2288,15 +2285,17 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.SpriteFont", function 
   );
 
   var measureResult = [0, 0, 0];
-  var measureCallback = function (characterRect, x, y, xOffset, yOffset, lineIndex) {
+  var measureCallback = function (character, characterRect, x, y, xOffset, yOffset, lineIndex) {
     var x2 = x + characterRect.Width + xOffset;
     var y2 = y + characterRect.Height + yOffset;
     measureResult[0] = Math.max(measureResult[0], x2);
 
-    if (measureResult[2] !== lineIndex) {
-      measureResult[1] = characterRect.Height;
-    } else {
-      measureResult[1] = Math.max(measureResult[1], characterRect.Height);
+    if (character !== " ") {
+      if (measureResult[2] !== lineIndex) {
+        measureResult[1] = y2 - y;
+      } else {
+        measureResult[1] = Math.max(measureResult[1], y2 - y);
+      }
     }
 
     measureResult[2] = lineIndex;
@@ -2329,7 +2328,10 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.SpriteFont", function 
     layerDepth: 0
   };
 
-  var drawCallback = function (characterRect, x, y, xOffset, yOffset, lineIndex) {
+  var drawCallback = function (character, characterRect, x, y, xOffset, yOffset, lineIndex) {
+    if (character === " ")
+      return;
+
     var texture = drawState.thisReference.textureValue;
     var spriteBatch = drawState.spriteBatch;
 
@@ -2411,6 +2413,9 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.Texture2D", function (
 
     this.image = document.createElement("img");
 
+    if (!this.image.id)
+      this.image.id = this.id;
+
     var textures = document.getElementById("textures");
     if (textures) 
       textures.appendChild(this.image);
@@ -2431,6 +2436,9 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.Texture2D", function (
     }, true);
     this.image.src = uri;
 
+    if (!this.image.id)
+      this.image.id = this.id;
+
     self.width = self.image.naturalWidth;
     self.height = self.image.naturalHeight;
 
@@ -2447,6 +2455,9 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.Texture2D", function (
     this.id = String(++$jsilxna.nextImageId);
 
     this.image = image;
+
+    if (!this.image.id)
+      this.image.id = this.id;
 
     this.width = image.naturalWidth;
     this.height = image.naturalHeight;
@@ -2642,9 +2653,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.Texture2D", function (
       return;
 
     var oldImage = this.image;
-    this.image = document.createElement("canvas");
-    this.image.width = this.width;
-    this.image.height = this.height;
+    this.image = JSIL.Host.createCanvas(this.width, this.height);
 
     // Firefox's canvas implementation is incredibly fragile.
     if (
@@ -2789,9 +2798,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.Texture2D", function (
   });
 
   $.RawMethod(false, "$saveToStream", function saveToStream (stream, width, height, mimeType) {
-    var temporaryCanvas = document.createElement("canvas");
-    temporaryCanvas.width = width;
-    temporaryCanvas.height = height;
+    var temporaryCanvas = JSIL.Host.createCanvas(width, height);
 
     var temporaryCtx = temporaryCanvas.getContext("2d");
     temporaryCtx.drawImage(this.image, 0, 0, width, height);
@@ -2850,6 +2857,9 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.RenderTarget2D", funct
     this.image = this.canvas = JSIL.Host.createCanvas(width, height);
     this.canvas.naturalWidth = width;
     this.canvas.naturalHeight = height;
+    
+    if (!this.image.id)
+      this.image.id = this.id;
 
     // Can't use WebGL here since it'll disable the ability to copy from the RT to the framebuffer.
     this.context = $jsilxna.get2DContext(this.canvas, false);
