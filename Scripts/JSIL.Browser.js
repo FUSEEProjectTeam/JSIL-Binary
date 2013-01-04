@@ -27,20 +27,41 @@ JSIL.DeclareNamespace("JSIL.Browser", false);
 JSIL.Browser.CanvasService = function () {
 };
 
+JSIL.Browser.CanvasService.prototype.applySize = function (element, desiredWidth, desiredHeight, isViewport) {
+  if (typeof (desiredWidth) !== "number")
+    desiredWidth = element.width;
+  if (typeof (desiredHeight) !== "number")
+    desiredHeight = element.height;
+
+  var scaleFactor = jsilConfig.viewportScale;
+  if (typeof (scaleFactor) !== "number")
+    scaleFactor = 1.0;
+
+  var width, height;
+  if (isViewport) {
+    width = Math.ceil(desiredWidth * scaleFactor);
+    height = Math.ceil(desiredHeight * scaleFactor);
+  } else {
+    width = desiredWidth;
+    height = desiredHeight;
+  }
+
+  element.actualWidth = desiredWidth;
+  element.actualHeight = desiredHeight;  
+  element.width = width;
+  element.height = height;
+}
+
 JSIL.Browser.CanvasService.prototype.get = function (desiredWidth, desiredHeight) {
   var e = document.getElementById("canvas");
-  if (typeof (desiredWidth) === "number")
-    e.width = desiredWidth;
-  if (typeof (desiredHeight) === "number")
-    e.height = desiredHeight;
+  this.applySize(e, desiredWidth, desiredHeight, true);
   
   return e;
 };
 
 JSIL.Browser.CanvasService.prototype.create = function (desiredWidth, desiredHeight) {
   var e = document.createElement("canvas");
-  e.width = desiredWidth;
-  e.height = desiredHeight;
+  this.applySize(e, desiredWidth, desiredHeight, false);
   
   return e;
 };
@@ -790,6 +811,8 @@ function pollAssetQueue () {
 
   var makeStepCallback = function (state, type, sizeBytes, i, name) {
     return function (finish) {
+      var realName = name;
+
       var lastDot = name.lastIndexOf(".");
       if (lastDot >= 0)
         name = name.substr(0, lastDot);
@@ -801,7 +824,7 @@ function pollAssetQueue () {
       if (typeof (finish) === "function")
         state.finishQueue.push([type, i, finish, name]);
 
-      delete state.assetsLoadingNames[name];
+      delete state.assetsLoadingNames[realName];
       state.assetsLoading -= 1;
       state.assetsLoaded += 1;
 
@@ -817,12 +840,7 @@ function pollAssetQueue () {
 
       allAssets[getAssetName(assetPath)] = null;
 
-      var errorText;
-
-      if (e && e.statusText)
-        errorText = e.statusText;
-      else
-        errorText = String(e);
+      var errorText = stringifyLoadError(e);
 
       state.assetLoadFailures.push(
         [assetPath, errorText]
@@ -835,7 +853,7 @@ function pollAssetQueue () {
         }
       }
 
-      JSIL.Host.logWriteLine("The asset '" + assetSpec + "' could not be loaded:" + errorText);
+      JSIL.Host.logWriteLine("The asset '" + assetPath + "' could not be loaded: " + errorText);
     };    
   };
 
@@ -1316,6 +1334,19 @@ function registerErrorHandler () {
     else
       return false;
   };
+};
+
+function stringifyLoadError (error) {
+  if (error && error.statusText)
+    return error.statusText;
+  else if (
+    error && 
+    (typeof (error) === "object") &&
+    (error.toString().indexOf("[object") === 0)
+  )
+    return "Unknown error";
+  else
+    return String(error);
 };
 
 function showSaveRecordingDialog () {

@@ -796,6 +796,9 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.SpriteBatch", function
       this.spriteEffects = Microsoft.Xna.Framework.Graphics.SpriteEffects;
       this.flipHorizontally = this.spriteEffects.FlipHorizontally.value;
       this.flipVertically = this.spriteEffects.FlipVertically.value;
+
+      this.saveCount = 0;
+      this.restoreCount = 0;
     }
   );
 
@@ -808,6 +811,9 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.SpriteBatch", function
     this.spriteEffects = spriteBatch.spriteEffects;
     this.flipHorizontally = spriteBatch.flipHorizontally;
     this.flipVertically = spriteBatch.flipVertically;
+      
+    this.saveCount = 0;
+    this.restoreCount = 0;
   });
 
   $.RawMethod(false, "$applyBlendState", function () {
@@ -933,7 +939,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.SpriteBatch", function
       this.device.$UpdateViewport();
 
       if (this.saveCount !== this.restoreCount)
-        JSIL.Host.warning("Unbalanced canvas save/restore");
+        throw new Error("Unbalanced canvas save/restore");
     }
   );
 
@@ -1658,14 +1664,14 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.GraphicsDevice", funct
     this.originalCanvas = this.canvas = JSIL.Host.getCanvas();
     this.renderTarget = null;
 
-    this.originalWidth = this.canvas.width;
-    this.originalHeight = this.canvas.height;
+    this.originalWidth = this.canvas.actualWidth || this.canvas.width;
+    this.originalHeight = this.canvas.actualHeight || this.canvas.height;
 
     this.originalContext = this.context = $jsilxna.get2DContext(this.canvas, true);
 
     this.viewport = new Microsoft.Xna.Framework.Graphics.Viewport();
-    this.viewport.Width = this.canvas.width;
-    this.viewport.Height = this.canvas.height;
+    this.viewport.Width = this.canvas.actualWidth || this.canvas.width;
+    this.viewport.Height = this.canvas.actualHeight || this.canvas.height;
     this.blendState = Microsoft.Xna.Framework.Graphics.BlendState.AlphaBlend;
     this.samplerStates = new Microsoft.Xna.Framework.Graphics.SamplerStateCollection(this, 0, 4);
     this.vertexSamplerStates = new Microsoft.Xna.Framework.Graphics.SamplerStateCollection(this, 0, 4);
@@ -1785,14 +1791,14 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.GraphicsDevice", funct
   $.RawMethod(false, "$UpdateViewport", function GraphicsDevice_$UpdateViewport () {
     this.context.setTransform(1, 0, 0, 1, 0, 0);
 
-    var scaleX = 1, scaleY = 1;
+    var scaleX = 1.0, scaleY = 1.0;
 
     if (this.canvas === this.originalCanvas) {
-      scaleX = this.viewport.Width / this.originalWidth;
-      scaleY = this.viewport.Height / this.originalHeight;
+      scaleX *= this.viewport.Width / this.originalWidth;
+      scaleY *= this.viewport.Height / this.originalHeight;
     } else {
-      scaleX = this.viewport.Width / this.canvas.width;
-      scaleY = this.viewport.Height / this.canvas.height;
+      scaleX *= this.viewport.Width / this.canvas.width;
+      scaleY *= this.viewport.Height / this.canvas.height;
     }
 
     this.context.translate(this.viewport.X, this.viewport.Y);
@@ -1807,6 +1813,9 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.GraphicsDevice", funct
     }
 
     this.context.scale(scaleX, scaleY);
+
+    if (jsilConfig.disableFiltering)
+      this.context.mozImageSmoothingEnabled = this.context.webkitImageSmoothingEnabled = false;
   });
 
   $.RawMethod(false, "$Clear", function GraphicsDevice_$Clear (colorCss) {
@@ -2049,6 +2058,9 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Graphics.SamplerStateCollection
       if (value) {
         enableSmoothing = value.get_Filter() != Microsoft.Xna.Framework.Graphics.TextureFilter.Point;
       }
+
+      if (jsilConfig.disableFiltering)
+        enableSmoothing = false;
 
       this.parent.context.mozImageSmoothingEnabled = this.parent.context.webkitImageSmoothingEnabled = enableSmoothing;
     }

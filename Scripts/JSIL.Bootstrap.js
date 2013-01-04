@@ -532,7 +532,14 @@ JSIL.ImplementExternals(
       new JSIL.MethodSignature($.String, []),
       function () {
         var message = this.Message;
-        return System.String.Format("{0}: {1}", JSIL.GetTypeName(this), message);
+        var result = System.String.Format("{0}: {1}", JSIL.GetTypeName(this), message);
+
+        if (this._innerException) {
+          result += "\n-- Inner exception follows --\n";
+          result += this._innerException.toString();
+        }
+
+        return result;
       }
     );
   }
@@ -620,6 +627,9 @@ JSIL.MakeClass("System.SystemException", "System.InvalidCastException", true);
 JSIL.MakeClass("System.SystemException", "System.InvalidOperationException", true);
 JSIL.MakeClass("System.SystemException", "System.NotImplementedException", true);
 JSIL.MakeClass("System.SystemException", "System.Reflection.AmbiguousMatchException", true);
+
+JSIL.MakeClass("System.SystemException", "System.ArgumentException", true);
+JSIL.MakeClass("System.SystemException", "System.ArgumentOutOfRangeException", true);
 
 JSIL.MakeClass("System.SystemException", "System.IOException", true);
 JSIL.MakeClass("System.IOException", "System.IO.FileNotFoundException", true);
@@ -802,9 +812,8 @@ $jsilcore.InitResizableArray = function (target, elementType, initialSize) {
 $jsilcore.$ListExternals = function ($, T, type) {
   var mscorlib = JSIL.GetCorlib();
 
-  if ((typeof (T) === "undefined") || (T === null)) {
-    T = new JSIL.GenericParameter("T", "System.Collections.Generic.List`1");
-  }
+  if (typeof (T) === "undefined")
+    throw new Error("Invalid use of $ListExternals");
 
   var getT;
 
@@ -853,7 +862,7 @@ $jsilcore.$ListExternals = function ($, T, type) {
   );
 
   $.Method({Static:false, Public:true }, ".ctor", 
-    new JSIL.MethodSignature(null, [mscorlib.TypeRef("System.Collections.Generic.IEnumerable`1", [new JSIL.GenericParameter("T", "System.Collections.Generic.List`1")])], []),
+    new JSIL.MethodSignature(null, [mscorlib.TypeRef("System.Collections.Generic.IEnumerable`1", [T])], []),
     function (values) {
       this._items = JSIL.EnumerableToArray(values);
       this._capacity = this._items.length;
@@ -946,7 +955,7 @@ $jsilcore.$ListExternals = function ($, T, type) {
   );
 
   $.Method({Static:false, Public:true }, "Find", 
-    new JSIL.MethodSignature(new JSIL.GenericParameter("T", "System.Collections.Generic.List`1"), [mscorlib.TypeRef("System.Predicate`1", [T])], []),
+    new JSIL.MethodSignature(T, [mscorlib.TypeRef("System.Predicate`1", [T])], []),
     function List_Find (predicate) {
       var index = this.FindIndex(predicate);
       if (index >= 0)
@@ -978,7 +987,7 @@ $jsilcore.$ListExternals = function ($, T, type) {
   );
 
   $.Method({Static:false, Public:true }, "FindIndex", 
-    new JSIL.MethodSignature(mscorlib.TypeRef("System.Int32"), [mscorlib.TypeRef("System.Predicate`1", [new JSIL.GenericParameter("T", "System.Collections.Generic.List`1")])], []),
+    new JSIL.MethodSignature(mscorlib.TypeRef("System.Int32"), [mscorlib.TypeRef("System.Predicate`1", [T])], []),
     findIndexImpl
   );
 
@@ -1055,7 +1064,7 @@ $jsilcore.$ListExternals = function ($, T, type) {
       break;
     case "List":
       $.Method({Static:false, Public:true }, "GetEnumerator", 
-        (new JSIL.MethodSignature(mscorlib.TypeRef("System.Collections.Generic.List`1/Enumerator", [new JSIL.GenericParameter("T", "System.Collections.Generic.List`1")]), [], [])), 
+        (new JSIL.MethodSignature(mscorlib.TypeRef("System.Collections.Generic.List`1/Enumerator", [T]), [], [])), 
         getEnumeratorImpl
       );
       break;
@@ -1068,7 +1077,7 @@ $jsilcore.$ListExternals = function ($, T, type) {
   }
 
   $.Method({Static:false, Public:true }, "Insert", 
-    (new JSIL.MethodSignature(null, [$.Int32, new JSIL.GenericParameter("T", "System.Collections.Generic.List`1")], [])), 
+    (new JSIL.MethodSignature(null, [$.Int32, T], [])), 
     function Insert (index, item) {
       this._items.splice(index, 0, item);
       this._size += 1;
@@ -1127,9 +1136,28 @@ $jsilcore.$ListExternals = function ($, T, type) {
   $.Method({Static:false, Public:true }, "RemoveAt", 
     new JSIL.MethodSignature(null, [mscorlib.TypeRef("System.Int32")], []),
     function (index) {
+      if (!rangeCheckImpl(index, this._size))
+        throw new System.ArgumentOutOfRangeException("index");
+
       this._items.splice(index, 1);
       this._size -= 1;
-      return true;
+    }
+  );
+
+  $.Method({Static:false, Public:true }, "RemoveRange", 
+    new JSIL.MethodSignature(null, [mscorlib.TypeRef("System.Int32")], []),
+    function (index, count) {
+      if (index < 0)
+        throw new System.ArgumentOutOfRangeException("index");
+      else if (count < 0)
+        throw new System.ArgumentOutOfRangeException("count");
+      else if (!rangeCheckImpl(index, this._size))
+        throw new System.ArgumentException();
+      else if (!rangeCheckImpl(index + count - 1, this._size))
+        throw new System.ArgumentException();
+
+      this._items.splice(index, count);
+      this._size -= count;
     }
   );
 
@@ -1188,10 +1216,12 @@ $jsilcore.$ListExternals = function ($, T, type) {
 };
 
 JSIL.ImplementExternals("System.Collections.Generic.List`1", function ($) {
-  $jsilcore.$ListExternals($, null, "List");
+  var T = new JSIL.GenericParameter("T", "System.Collections.Generic.List`1");
+
+  $jsilcore.$ListExternals($, T, "List");
 
   $.Method({ Static: false, Public: true }, "CopyTo",
-    new JSIL.MethodSignature(null, [$jsilcore.TypeRef("System.Array", [new JSIL.GenericParameter("T", "System.Collections.Generic.List`1")]), $.Int32], []),
+    new JSIL.MethodSignature(null, [$jsilcore.TypeRef("System.Array", [T]), $.Int32], []),
     function (array, arrayindex) {
       if (arrayindex != 0) {
           throw new Error("List<T>.CopyTo not supported for non-zero indexes");
@@ -2719,10 +2749,11 @@ JSIL.ImplementExternals(
       new JSIL.MethodSignature($jsilcore.TypeRef("System.Array"), [$jsilcore.TypeRef("System.Type")], []),
       function (enm) {
         var names = enm.__Names__;
+        var publicInterface = enm.__PublicInterface__;
         var result = new Array(names.length);
 
         for (var i = 0; i < result.length; i++)
-          result[i] = enm[names[i]];
+          result[i] = publicInterface[names[i]];
 
         return result;
       }
