@@ -467,8 +467,4 @@ function initAssetLoaders () {
   JSIL.InitBlobBuilder();
   initCORSHack();
   initSoundLoader();
-
-  $makeXNBAssetLoader("XNB", "RawXNBAsset");
-  $makeXNBAssetLoader("SpriteFont", "SpriteFontAsset");
-  $makeXNBAssetLoader("Texture2D", "Texture2DAsset");
 };

@@ -152,8 +152,10 @@ JSIL.Audio.NullInstance.prototype = Object.create(JSIL.Audio.InstancePrototype);
 
 function finishLoadingSound (filename, createInstance) {
   $jsilbrowserstate.allAssetNames.push(filename);
-  var asset = new CallbackSoundAsset(getAssetName(filename, true), createInstance);
-  allAssets[getAssetName(filename)] = asset;
+  allAssets[getAssetName(filename)] = null;
+
+  //var asset = new CallbackSoundAsset(getAssetName(filename, true), createInstance);
+  //allAssets[getAssetName(filename)] = asset;
 };
 
 function loadNullSound (audioInfo, filename, data, onError, onDoneLoading) {
@@ -304,17 +306,40 @@ function loadHTML5Sound (audioInfo, filename, data, onError, onDoneLoading) {
   onDoneLoading(finisher);
 }
 
+function loadJSSoundComplete(evt, src, onDoneLoading, finisher) {
+  if (evt.src == src) {
+    onDoneLoading(finisher);
+  }
+}
+
+function loadSoundJSSound (audioInfo, filename, data, onError, onDoneLoading) {
+  var handleError = function (text) {
+    JSIL.Host.warning(new Error(text));
+	return handleError("Error while loading '" + filename + "'.");
+  };
+
+  var uri = audioInfo.selectUri(filename, data).replace(/^(?:\.\/)+/, "");
+  if (uri == null)
+    return handleError("No supported formats for '" + filename + "'.");
+	
+  var createInstance = null;
+  
+   var finisher = finishLoadingSound.bind(
+    null, filename, createInstance
+  );
+
+  $jsilbrowserstate.allAssetNames.push(filename);
+  allAssets[filename] = uri;
+
+  createjs.Sound.addEventListener("loadComplete", createjs.proxy(loadJSSoundComplete, this, uri, onDoneLoading, finisher));
+  createjs.Sound.registerSound(uri);
+}
+
 function loadSoundGeneric (audioInfo, filename, data, onError, onDoneLoading) {
   if (audioInfo.disableSound) {
     return loadNullSound(audioInfo, filename, data, onError, onDoneLoading);
-  } else if (data.stream) {
-    return loadStreamingSound(audioInfo, filename, data, onError, onDoneLoading);
-  } else if (audioInfo.hasAudioContext) {
-    return loadWebkitSound(audioInfo, filename, data, onError, onDoneLoading);
-  } else if (audioInfo.hasObjectURL && (audioInfo.hasBlobBuilder || audioInfo.hasBlobCtor)) {
-    return loadBufferedHTML5Sound(audioInfo, filename, data, onError, onDoneLoading);
   } else {
-    return loadHTML5Sound(audioInfo, filename, data, onError, onDoneLoading);
+    return loadSoundJSSound(audioInfo, filename, data, onError, onDoneLoading);
   }
 };
 
