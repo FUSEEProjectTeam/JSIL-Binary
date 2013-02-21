@@ -84,6 +84,7 @@ var $jsilloaderstate = {
   Environment_Browser.prototype.loadEnvironmentScripts = function () {
     var libraryRoot = this.config.libraryRoot;
 
+	this.loadScript(libraryRoot + "soundjs-0.4.0.min.js");
     this.loadScript(libraryRoot + "JSIL.Browser.js");
     this.loadScript(libraryRoot + "JSIL.Browser.Audio.js");
     this.loadScript(libraryRoot + "JSIL.Browser.Loaders.js");
