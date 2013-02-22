@@ -318,7 +318,7 @@ function loadSoundJSSound (audioInfo, filename, data, onError, onDoneLoading) {
 	return handleError("Error while loading '" + filename + "'.");
   };
 
-  var uri = audioInfo.selectUri(filename, data).replace(/^(?:\.\/)+/, "");
+  var uri = audioInfo.selectUri(filename, data);
   if (uri == null)
     return handleError("No supported formats for '" + filename + "'.");
 	
@@ -396,6 +396,8 @@ function initSoundLoader () {
   };
 
   audioInfo.selectUri = function (filename, data, outMimeType) {
+    var compl = "";
+
     for (var i = 0; i < data.formats.length; i++) {
       var format = data.formats[i];
       var extension, mimeType = null;
@@ -407,17 +409,22 @@ function initSoundLoader () {
         mimeType = format.mimetype;
       }
 
-      mimeType = this.getMimeType(extension, mimeType);
+      if (i > 0)
+        compl = compl + "|";
 
-      if (this.canPlayType(mimeType)) {
-        if (outMimeType)
-          outMimeType[0] = mimeType;
+      compl = compl + jsilConfig.contentRoot.replace(/^(?:\.\/)+/, "") + filename + extension;
 
-        return jsilConfig.contentRoot + filename + extension;
-      }
+      //mimeType = this.getMimeType(extension, mimeType);
+
+      //if (this.canPlayType(mimeType)) {
+      //  if (outMimeType)
+      //    outMimeType[0] = mimeType;
+
+      //  return jsilConfig.contentRoot + filename + extension;
+      //}
     }
 
-    return null;
+    return compl;
   };
 
   if (audioInfo.hasAudioContext) {

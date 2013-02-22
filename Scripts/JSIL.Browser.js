@@ -411,6 +411,11 @@ JSIL.Host.doesAssetExist = function (filename, stripRoot) {
 
   return true;
 };
+
+JSIL.Host.getAssetVal = function (key) {
+  return allAssets[key];
+}
+
 JSIL.Host.getAsset = function (filename, stripRoot) {
   if (filename === null)
     throw new System.Exception("Filename was null");
