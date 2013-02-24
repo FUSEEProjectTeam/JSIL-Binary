@@ -35,27 +35,20 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <DebugType>full</DebugType>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <CodeAnalysisLogFile>..\..\Bin\Debug\WebGL\WebGL.dll.CodeAnalysisLog.xml</CodeAnalysisLogFile>
-    <CodeAnalysisUseTypeNameInSuppression>true</CodeAnalysisUseTypeNameInSuppression>
-    <CodeAnalysisModuleSuppressionsFile>GlobalSuppressions.cs</CodeAnalysisModuleSuppressionsFile>
     <ErrorReport>prompt</ErrorReport>
-    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <CodeAnalysisRuleSetDirectories>;C:\Program Files (x86)\Microsoft Visual Studio 10.0\Team Tools\Static Analysis Tools\\Rule Sets</CodeAnalysisRuleSetDirectories>
-    <CodeAnalysisRuleDirectories>;C:\Program Files (x86)\Microsoft Visual Studio 10.0\Team Tools\Static Analysis Tools\FxCop\\Rules</CodeAnalysisRuleDirectories>
-    <CodeAnalysisIgnoreBuiltInRules>true</CodeAnalysisIgnoreBuiltInRules>
-    <CodeAnalysisFailOnMissingRules>false</CodeAnalysisFailOnMissingRules>
     <WarningLevel>4</WarningLevel>
     <Optimize>false</Optimize>
+    <DocumentationFile>
+    </DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <Folder Include="Compiler\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)/Microsoft.CSharp.targets" />
   <Target Name="Build">
-    <MakeDir Directories="$(OutputPath)" Condition="!Exists('$(OutputPath)')" />
-
-    <Exec Condition=" '$(OS)' != 'Windows_NT' " Command="rsync -a *.js $(OutputPath)" />
-    <Exec Condition=" '$(OS)' == 'Windows_NT' " Command="xcopy *.js $(OutputPath) /D /C /Q /R /Y /K" />
+    <MakeDir Directories="$(OutputPath)Scripts" Condition="!Exists('$(OutputPath)Scripts')" />
+    <Exec Condition=" '$(OS)' != 'Windows_NT' " Command="rsync -a Scripts/*.* $(OutputPath)Scripts/" />
+    <Exec Condition=" '$(OS)' == 'Windows_NT' " Command="xcopy Scripts\*.* $(OutputPath)Scripts\ /D /E /C /Q /R /Y /K" />
   </Target>
   <Target Name="Rebuild" DependsOnTargets="Build" />
   <Target Name="Clean" />
