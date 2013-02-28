@@ -84,7 +84,6 @@ var $jsilloaderstate = {
   Environment_Browser.prototype.loadEnvironmentScripts = function () {
     var libraryRoot = this.config.libraryRoot;
 
-	this.loadScript(libraryRoot + "soundjs-0.4.0.min.js");
     this.loadScript(libraryRoot + "JSIL.Browser.js");
     this.loadScript(libraryRoot + "JSIL.Browser.Audio.js");
     this.loadScript(libraryRoot + "JSIL.Browser.Loaders.js");
@@ -170,15 +169,18 @@ var $jsilloaderstate = {
   environment.loadScript(libraryRoot + "ES5.js");
   environment.loadScript(libraryRoot + "mersenne.js");
   environment.loadScript(libraryRoot + "JSIL.Core.js");
-  environment.loadScript(libraryRoot + "JSIL.Core.Types.js");
   environment.loadScript(libraryRoot + "JSIL.Host.js");
+
+  environment.loadEnvironmentScripts();
+  
+  environment.loadScript(libraryRoot + "JSIL.Core.Types.js");
+  environment.loadScript(libraryRoot + "JSIL.References.js");
+  environment.loadScript(libraryRoot + "JSIL.Unsafe.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.Int64.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.DateTime.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.Text.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.Resources.js");
-
-  environment.loadEnvironmentScripts();
 
   if (config.testFixture || environment.getUserSetting("testFixture"))
     environment.loadScript(libraryRoot + "JSIL.TestFixture.js");
@@ -202,6 +204,8 @@ var $jsilloaderstate = {
   config.viewportScale = parseFloat((config.viewportScale || environment.getUserSetting("viewportScale") || 1.0).toString());
 
   config.disableFiltering = config.disableFiltering || environment.getUserSetting("disableFiltering") || false;
+
+  config.enableFreezeAndSeal = config.enableFreezeAndSeal || environment.getUserSetting("enableFreezeAndSeal") || false;
 
   var manifests = config.manifests || [];
 

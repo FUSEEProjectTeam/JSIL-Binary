@@ -33,9 +33,9 @@ $jsilcore.$ParseBoolean = function (text) {
   if (arguments.length !== 1)
     throw new Error("NumberStyles not supported");
 
-  var temp = {};
+  var temp = new JSIL.BoxedVariable(null);
   if ($jsilcore.$TryParseBoolean(text, temp))
-    return temp.value;
+    return temp.get();
 
   throw new System.Exception("Invalid boolean");
 };
@@ -44,10 +44,10 @@ $jsilcore.$TryParseBoolean = function (text, result) {
   text = text.toLowerCase().trim();
 
   if (text === "true") {
-    result.value = true;
+    result.set(true);
     return true;
   } else if (text === "false") {
-    result.value = false;
+    result.set(false);
     return true;
   }
 
@@ -119,9 +119,9 @@ JSIL.ImplementExternals(
 JSIL.MakeNumericType(Number, "System.SByte", true, "Int8Array");
 
 $jsilcore.$ParseInt = function (text, style) {
-  var temp = {};
+  var temp = new JSIL.BoxedVariable(null);
   if ($jsilcore.$TryParseInt(text, style, temp))
-    return temp.value;
+    return temp.get();
 
   throw new System.Exception("Invalid integer");
 };
@@ -137,8 +137,9 @@ $jsilcore.$TryParseInt = function (text, style, result) {
   if (style & System.Globalization.NumberStyles.AllowHexSpecifier)
     radix = 16;
 
-  result.value = parseInt(text, radix);
-  return !isNaN(result.value);
+  var parsed;
+  result.set(parsed = parseInt(text, radix));
+  return !isNaN(parsed);
 };
 
 JSIL.ImplementExternals(
@@ -198,9 +199,9 @@ JSIL.ImplementExternals(
 JSIL.MakeNumericType(Number, "System.Int32", true, "Int32Array");
 
 $jsilcore.$ParseFloat = function (text, style) {
-  var temp = {};
+  var temp = new JSIL.BoxedVariable(null);
   if ($jsilcore.$TryParseFloat(text, style, temp))
-    return temp.value;
+    return temp.get();
 
   throw new System.Exception("Invalid float");
 };
@@ -211,19 +212,20 @@ $jsilcore.$TryParseFloat = function (text, style, result) {
     style = 0;
   }
 
-  result.value = parseFloat(text);
+  var parsed;
+  result.set(parsed = parseFloat(text));
 
-  if (isNaN(result.value)) {
+  if (isNaN(parsed)) {
     var lowered = text.toLowerCase();
 
     if (lowered === "nan") {
-      result.value = Number.NaN;
+      result.set(Number.NaN);
       return true;
     } else if (lowered === "-infinity") {
-      result.value = Number.NEGATIVE_INFINITY;
+      result.set(Number.NEGATIVE_INFINITY);
       return true;
     } else if ((lowered === "+infinity") || (lowered === "infinity")) {
-      result.value = Number.POSITIVE_INFINITY;
+      result.set(Number.POSITIVE_INFINITY);
       return true;
     } else {
       return false;
@@ -635,6 +637,9 @@ JSIL.MakeClass("System.SystemException", "System.IOException", true);
 JSIL.MakeClass("System.IOException", "System.IO.FileNotFoundException", true);
 JSIL.MakeClass("System.IOException", "System.IO.EndOfStreamException", true);
 
+JSIL.MakeClass("System.SystemException", "System.ArithmeticException", true);
+JSIL.MakeClass("System.ArithmeticException", "System.OverflowException", true);
+
 JSIL.ImplementExternals("System.Console", function ($) {
   $.RawMethod(true, "WriteLine", function () {
     var text = "";
@@ -733,7 +738,7 @@ JSIL.MakeClass("System.Object", "JSIL.ArrayEnumerator", true, ["T"], function ($
   );
 });
 
-JSIL.MakeClass("System.Object", "JSIL.EnumerableArrayOverlay", true, ["T"], function ($) {
+JSIL.MakeClass("System.Object", "JSIL.ArrayInterfaceOverlay", true, ["T"], function ($) {
   $.RawMethod(false, ".ctor", 
     function (array) {
       this._array = array;
@@ -753,10 +758,14 @@ JSIL.MakeClass("System.Object", "JSIL.EnumerableArrayOverlay", true, ["T"], func
       return JSIL.GetEnumerator(this._array);
     }
   );
+  
+  // FIXME: Implement actual members of IList.
 
   $.ImplementInterfaces(
     System.Collections.IEnumerable,
-    $jsilcore.TypeRef("System.Collections.Generic.IEnumerable`1", [new JSIL.GenericParameter("T", "JSIL.EnumerableArrayOverlay")])
+    $jsilcore.TypeRef("System.Collections.Generic.IEnumerable`1", [new JSIL.GenericParameter("T", "JSIL.ArrayInterfaceOverlay")]),
+    System.Collections.IList,
+    $jsilcore.TypeRef("System.Collections.Generic.IList`1", [new JSIL.GenericParameter("T", "JSIL.ArrayInterfaceOverlay")])
   );
 });
 
@@ -1569,10 +1578,10 @@ JSIL.MakeClass($jsilcore.TypeRef("JSIL.ArrayEnumerator", [new JSIL.GenericParame
 JSIL.ImplementExternals(
   "System.Threading.Interlocked", function ($) {
     var cmpxchg = function (targetRef, value, comparand) {
-      var currentValue = targetRef.value;
+      var currentValue = targetRef.get();
 
       if (currentValue === comparand)
-        targetRef.value = value;
+        targetRef.set(value);
 
       return currentValue;
     };
@@ -1617,7 +1626,7 @@ JSIL.ImplementExternals("System.Threading.Monitor", function ($) {
   $.Method({Static:true , Public:true }, "Enter", 
     (new JSIL.MethodSignature(null, [$.Object, $jsilcore.TypeRef("JSIL.Reference", [$.Boolean])], [])), 
     function Enter (obj, /* ref */ lockTaken) {
-      lockTaken.value = enterImpl(obj);
+      lockTaken.set(enterImpl(obj));
     }
   );
 
@@ -2151,7 +2160,7 @@ JSIL.ImplementExternals("System.Collections.Generic.Dictionary`2", function ($) 
               var current = this._state.current;
               current.key = bucket[valueIndex].key;
               current.value = bucket[valueIndex].value;
-              result.value = current;
+              result.set(current);
               return true;
             } else {
               bucketIndex = ++(this._state.bucketIndex);
@@ -2192,10 +2201,10 @@ JSIL.ImplementExternals("System.Collections.Generic.Dictionary`2", function ($) 
     function TryGetValue (key, /* ref */ value) {
       var bucketEntry = this.$searchBucket(key);
       if (bucketEntry !== null) {
-        value.value = bucketEntry.value;
+        value.set(bucketEntry.value);
         return true;
       } else {
-        value.value = JSIL.DefaultValue(this.TValue);
+        value.set(JSIL.DefaultValue(this.TValue));
       }
 
       return false;
@@ -2316,7 +2325,7 @@ JSIL.MakeClass("System.Object", "JSIL.AbstractEnumerator", true, [], function ($
       target._dispose = source._dispose;
       target._first = source._first;
       target._needDispose = source._needDispose;
-      target._current = new JSIL.Variable(source._current.value);
+      target._current = new JSIL.BoxedVariable(source._current.get());
       target._state = source._state;
     }
   );
@@ -2329,7 +2338,7 @@ JSIL.MakeClass("System.Object", "JSIL.AbstractEnumerator", true, [], function ($
       this._dispose = dispose;
       this._first = true;
       this._needDispose = false;
-      this._current = new JSIL.Variable(null);
+      this._current = new JSIL.BoxedVariable(null);
     }
   );
 
@@ -2372,7 +2381,7 @@ JSIL.MakeClass("System.Object", "JSIL.AbstractEnumerator", true, [], function ($
   $.Method({Static: false, Public: true }, "get_Current",
     new JSIL.MethodSignature(JSIL.AnyType, []),
     function () {
-      return this._current.value;
+      return this._current.get();
     }
   );
 
@@ -2496,7 +2505,7 @@ JSIL.ImplementExternals(
           function getNext (result) {
             var ok = state.enumerator.IEnumerator_MoveNext();
             if (ok)
-              result.value = selector(state.enumerator.IEnumerator_Current);
+              result.set(selector(state.enumerator.IEnumerator_Current));
 
             return ok;
           },
@@ -2668,7 +2677,7 @@ JSIL.ImplementExternals(
       var items = text.split(",");
 
       var resultValue = 0;
-      var temp = new JSIL.Variable();
+      var temp = new JSIL.BoxedVariable();
 
       var publicInterface = TEnum.__PublicInterface__;
 
@@ -2678,7 +2687,7 @@ JSIL.ImplementExternals(
           continue;
 
         if (internalTryParse(TEnum, item, ignoreCase, temp)) {
-          resultValue = resultValue | temp.value;
+          resultValue = resultValue | temp.get();
         } else {
           return false;
         }
@@ -2687,10 +2696,10 @@ JSIL.ImplementExternals(
       var name = TEnum.__ValueToName__[resultValue];
 
       if (typeof (name) === "undefined") {
-        result.value = publicInterface.$MakeValue(resultValue, null);
+        result.set(publicInterface.$MakeValue(resultValue, null));
         return true;
       } else {
-        result.value = publicInterface[name];
+        result.set(publicInterface[name]);
         return true;
       }
     };
@@ -2712,32 +2721,32 @@ JSIL.ImplementExternals(
             var isMatch = (names[i].toLowerCase() == text.toLowerCase());
 
             if (isMatch) {
-              result.value = publicInterface[names[i]];
+              result.set(publicInterface[names[i]]);
               break;
             }
           }
         } else {
-          result.value = publicInterface[text];
+          result.set(publicInterface[text]);
         }
 
-        return (typeof (result.value) !== "undefined");
+        return (typeof (result.get()) !== "undefined");
       } else {
         var name = TEnum.__ValueToName__[num];
 
         if (typeof (name) === "undefined") {
-          result.value = publicInterface.$MakeValue(num, null);
+          result.set(publicInterface.$MakeValue(num, null));
           return true;
         } else {
-          result.value = publicInterface[name];
+          result.set(publicInterface[name]);
           return true;
         }
       }
     };
 
     var internalParse = function (enm, text, ignoreCase) {
-      var result = new JSIL.Variable();
+      var result = new JSIL.BoxedVariable();
       if (internalTryParse(enm, text, ignoreCase, result))
-        return result.value;
+        return result.get();
 
       throw new System.Exception("Failed to parse enum");
     };

@@ -280,10 +280,6 @@ JSIL.GetAssembly = function (assemblyName, requireExisting) {
 
 var $jsilcore = JSIL.DeclareAssembly("JSIL.Core");
 
-// Object.freeze and Object.seal make reads *slower* in modern versions of Chrome and older versions of Firefox.
-// WTF? Maybe they won't suck sometime in the distant future.
-$jsilcore.SealInitializedTypes = false;
-
 // Using these constants instead of 'null' turns some call sites from dimorphic to monomorphic in SpiderMonkey's
 //  type inference engine.
 
@@ -1416,6 +1412,7 @@ JSIL.MakeNumericType = function (baseType, typeName, isIntegral, typedArrayName)
   JSIL.MakeType(baseType, typeName, false, true, [], function ($) {
     $.SetValue("__IsNumeric__", true);
     $.SetValue("__IsIntegral__", isIntegral);
+    $.SetValue("__IsNativeType__", true);
 
     if (typedArrayName) {
       var typedArrayCtorExists = false;
@@ -1437,6 +1434,19 @@ JSIL.MakeNumericType = function (baseType, typeName, isIntegral, typedArrayName)
 
     JSIL.MakeCastMethods(
       $.publicInterface, $.typeObject, isIntegral ? "integer" : "number"
+    );
+
+    $.RawMethod(
+      true, "$OverflowCheck",
+      function OverflowCheck (value) {
+        var minValue = $.publicInterface.MinValue;
+        var maxValue = $.publicInterface.MaxValue;
+
+        if ((value < minValue) || (value > maxValue))
+          throw new System.OverflowException("Arithmetic operation resulted in an overflow.");
+
+        return (value | 0);
+      }
     );
   });
 };
@@ -1860,7 +1870,8 @@ $jsilcore.$Of$NoInitialize = function () {
     "Of", "toString", "__FullName__", "__OfCache__", "Of$NoInitialize",
     "GetType", "__ReflectionCache__", "__Members__", "__ThisTypeId__",
     "__RanCctors__", "__RanFieldInitializers__", "__PreInitMembrane__",
-    "__FieldList__", "__InterfaceMembers__"
+    "__FieldList__", "__InterfaceMembers__",
+    "__StructComparer__", "__StructMarshaller__", "__StructUnmarshaller__"
   ];
 
   // FIXME: for ( in ) is deoptimized in V8. Maybe use Object.keys(), or type metadata?
@@ -2607,6 +2618,7 @@ JSIL.$BuildFieldList = function (typeObject) {
     typeObject, $jsilcore.BindingFlags.Instance, "FieldInfo"
   );
   var fl = typeObject.__FieldList__ = [];
+  var fieldOffset = 0;
 
   for (var i = 0; i < fields.length; i++) {
     var field = fields[i];
@@ -2632,17 +2644,26 @@ JSIL.$BuildFieldList = function (typeObject) {
     // Native types may derive from System.ValueType but we can't treat them as structs.
     var isStruct = (fieldType.__IsStruct__ || false) && (!fieldType.__IsNativeType__);
 
+    var fieldSize = JSIL.GetNativeSizeOf(fieldType);
+
     if (!field.IsStatic)
       fl.push({
         name: field.Name,
         type: fieldType,
         isStruct: isStruct,
-        defaultValueExpression: field._data.defaultValueExpression
+        defaultValueExpression: field._data.defaultValueExpression,
+        offsetBytes: fieldOffset,
+        sizeBytes: fieldSize
       });
+
+    if (fieldSize >= 0)
+      fieldOffset += fieldSize;
   }
 
   // Sort fields by name so that we get a predictable initialization order.
-  fl.sort(JSIL.CompareValues)
+  fl.sort(function (lhs, rhs) {
+    return JSIL.CompareValues(lhs.name, rhs.name);
+  })
 
   return fl;
 };
@@ -3390,13 +3411,6 @@ JSIL.InitializeType = function (type) {
   ) {
     JSIL.InitializeType(type.__BaseType__);
   }
-
-  if ($jsilcore.SealInitializedTypes) {
-    Object.seal(type);
-
-    if (typeof(type.__PublicInterface__) === "object")
-      Object.seal(type.__PublicInterface__);
-  }
 };
 
 JSIL.RunStaticConstructors = function (classObject, typeObject) {
@@ -3735,14 +3749,16 @@ JSIL.$ActuallyMakeCastMethods = function (publicInterface, typeObject, specialTy
   };
 
   var isIEnumerable = typeName.indexOf(".IEnumerable") >= 0;
+  var isIList = typeName.indexOf(".IList") >= 0;
 
   // HACK: Handle casting arrays to IEnumerable by creating an overlay.
-  if (isIEnumerable) {
-    checkMethod = function Check_IEnumerable (value) {
+  if (isIEnumerable || isIList) {
+    checkMethod = function Check_ArrayInterface (value) {
       // FIXME: IEnumerable<int>.Is(float[]) will return true.
       if (JSIL.IsArray(value))
         return true;
 
+      // Fallback to default check logic
       return false;
     };
   }
@@ -3916,14 +3932,14 @@ JSIL.$ActuallyMakeCastMethods = function (publicInterface, typeObject, specialTy
     };
   }
 
-  if (isIEnumerable) {
+  if (isIEnumerable || isIList) {
     var innerAsFunction = asFunction;
     var innerCastFunction = castFunction;
 
-    var createOverlay = function Overlay_IEnumerable (value) {
+    var createOverlay = function Overlay_ArrayInterface (value) {
       if (JSIL.IsArray(value)) {
         // FIXME: Detect correct type
-        var tOverlay = JSIL.EnumerableArrayOverlay.Of(System.Object);
+        var tOverlay = JSIL.ArrayInterfaceOverlay.Of(System.Object);
 
         return new tOverlay(value);
       }
@@ -3931,11 +3947,11 @@ JSIL.$ActuallyMakeCastMethods = function (publicInterface, typeObject, specialTy
       return value;
     };
 
-    asFunction = function As_IEnumerable (value) {
+    asFunction = function As_ArrayInterface (value) {
       return createOverlay(innerAsFunction(value));
     };
 
-    castFunction = function Cast_IEnumerable (value) {
+    castFunction = function Cast_ArrayInterface (value) {
       return createOverlay(innerCastFunction(value));
     };
   }
@@ -4125,6 +4141,8 @@ JSIL.MakeType = function (baseType, fullName, isReferenceType, isPublic, generic
     typeObject.__FieldInitializer__ = $jsilcore.FunctionNotInitialized;
     typeObject.__MemberCopier__ = $jsilcore.FunctionNotInitialized;
     typeObject.__StructComparer__ = $jsilcore.FunctionNotInitialized;
+    typeObject.__StructMarshaller__ = $jsilcore.FunctionNotInitialized;
+    typeObject.__StructUnmarshaller__ = $jsilcore.FunctionNotInitialized;
     typeObject.__Properties__ = [];
     typeObject.__Initializers__ = [];
     typeObject.__Interfaces__ = Array.prototype.slice.call(baseTypeInterfaces);
@@ -4138,8 +4156,10 @@ JSIL.MakeType = function (baseType, fullName, isReferenceType, isPublic, generic
     typeObject.__ShortName__ = localName;
     typeObject.__LockCount__ = 0;
     typeObject.__Members__ = [];
-    typeObject.__ExternalMethods__ = [];
+    // FIXME: I'm not sure this is right. See InheritedExternalStubError.cs
+    typeObject.__ExternalMethods__ = Array.prototype.slice.call(typeObject.__BaseType__.__ExternalMethods__ || []);
     typeObject.__Attributes__ = memberBuilder.attributes;
+    typeObject.__RanCctors__ = false;
 
     if (typeof(typeObject.__BaseType__.__RenamedMethods__) === "object")
       typeObject.__RenamedMethods__ = JSIL.CloneObject(typeObject.__BaseType__.__RenamedMethods__);
@@ -4151,6 +4171,24 @@ JSIL.MakeType = function (baseType, fullName, isReferenceType, isPublic, generic
     typeObject.__IsStruct__ = !isReferenceType && (baseTypeName === "System.ValueType");
     typeObject.IsInterface = false;
     typeObject.__IsValueType__ = !isReferenceType;
+
+    // Lazily initialize struct's native size property
+    JSIL.SetLazyValueProperty(
+      typeObject, "__NativeSize__",
+      function () {
+        var fields = JSIL.GetFieldList(typeObject);
+        var resultSize = 0;
+
+        for (var i = 0, l = fields.length; i < l; i++) {
+          var field = fields[i];
+
+          if (field.sizeBytes >= 0)
+            resultSize += field.sizeBytes;
+        }
+
+        return resultSize;
+      }
+    );
 
     if (stack !== null)
       typeObject.__CallStack__ = stack;
@@ -6317,8 +6355,9 @@ JSIL.Array.New = function Array_New (elementType, sizeOrInitializer) {
     size = Number(sizeOrInitializer);
   }
 
-  if (elementTypeObject.__TypedArray__) {
-    result = new (elementTypeObject.__TypedArray__)(size);
+  var typedArrayCtor = JSIL.GetTypedArrayConstructorForElementType(elementTypeObject, false);
+  if (typedArrayCtor) {
+    result = new (typedArrayCtor)(size);
   } else {
     result = new Array(size);
   }
@@ -6327,7 +6366,7 @@ JSIL.Array.New = function Array_New (elementType, sizeOrInitializer) {
     // If non-numeric, assume array initializer
     for (var i = 0; i < sizeOrInitializer.length; i++)
       result[i] = sizeOrInitializer[i];
-  } else if (!elementTypeObject.__TypedArray__) {
+  } else if (!typedArrayCtor) {
     JSIL.Array.Erase(result, elementType);
   }
 
@@ -6721,4 +6760,24 @@ JSIL.ResolveGenericExternalMethods = function (publicInterface, typeObject) {
 
   for (var i = 0, l = result.length; i < l; i++)
     result[i] = JSIL.$ResolveGenericMethodSignature(typeObject, externalMethods[i], publicInterface) || externalMethods[i];
+};
+
+JSIL.FreezeImmutableObject = function (object) {
+  // Object.freeze and Object.seal make reads *slower* in modern versions of Chrome and older versions of Firefox.
+  if (jsilConfig.enableFreezeAndSeal === true)
+    Object.freeze(object);
+};
+
+JSIL.GetTypedArrayConstructorForElementType = function (typeObject, byteFallback) {
+  if (!typeObject)
+    throw new Error("typeObject was null");
+
+  var result = typeObject.__TypedArray__ || null;
+
+  if (!result && byteFallback) {
+    if (typeObject.__IsStruct__)
+      result = $jsilcore.System.Byte.__TypedArray__ || null;
+  }
+
+  return result;
 };
