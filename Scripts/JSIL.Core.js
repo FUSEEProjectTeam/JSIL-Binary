@@ -892,7 +892,7 @@ JSIL.MakeExternalMemberStub = function (namespaceName, getMemberName, inheritedM
   if (typeof (inheritedMember) === "function") {
     result = function ExternalMemberStub () {
       if (state.warningCount < 1) {
-        // JSIL.Host.warning("The external method '" + getMemberName.call(this) + "' of type '" + namespaceName + "' has not been implemented; calling inherited method.");
+        JSIL.Host.warning("The external method '" + getMemberName.call(this) + "' of type '" + namespaceName + "' has not been implemented; calling inherited method.");
         state.warningCount += 1;
       }
 
