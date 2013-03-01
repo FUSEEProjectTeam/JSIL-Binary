@@ -5,6 +5,7 @@
       "mscorlib,",
       "System.*",
       "Microsoft.*",
+	  "Mono.*",
       "FSharp.Core"
     ],
     "Ignored": [
@@ -16,7 +17,8 @@
       "System.Runtime.Serialization.Formatters.Soap,",
       "System.Runtime.DurableInstancing,",
       "System.Data.SqlXml,",
-      "JSIL.Meta,"
+      "JSIL.Meta,",
+	  "Mono.Posix.*"
     ]
   },
   "ProfileSettings": {
