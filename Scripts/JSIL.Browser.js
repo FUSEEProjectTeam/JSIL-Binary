@@ -794,7 +794,7 @@ function finishLoading () {
     } else {
       initIfNeeded();
 
-      updateProgressBar("Starting game", null, 1, 1);
+      updateProgressBar("Initialising...", null, 0.7, 1);
 
       var allFailures = $jsilloaderstate.loadFailures.concat(state.assetLoadFailures);
 

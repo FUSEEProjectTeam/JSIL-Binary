@@ -327,7 +327,8 @@ function loadSoundJSSound (audioInfo, filename, data, onError, onDoneLoading) {
    var finisher = finishLoadingSound.bind(
     null, filename, createInstance
   );
-
+  
+  filename = filename.replace(/\.[^/.]+$/, "");
   $jsilbrowserstate.allAssetNames.push(filename);
   allAssets[filename] = uri;
 
@@ -398,33 +399,38 @@ function initSoundLoader () {
   audioInfo.selectUri = function (filename, data, outMimeType) {
     var compl = "";
 
-    for (var i = 0; i < data.formats.length; i++) {
-      var format = data.formats[i];
-      var extension, mimeType = null;
+	if (data.formats === undefined)
+	{alert(filename);
+		return jsilConfig.contentRoot.replace(/^(?:\.\/)+/, "") + filename;
+	} else {	
+		for (var i = 0; i < data.formats.length; i++) {
+			var format = data.formats[i];
+			var extension, mimeType = null;
 
-      if (typeof (format) === "string") {
-        extension = format;
-      } else {
-        extension = format.extension;
-        mimeType = format.mimetype;
-      }
+			if (typeof (format) === "string") {
+				extension = format;
+			} else {
+				extension = format.extension;
+				mimeType = format.mimetype;
+			}
 
-      if (i > 0)
-        compl = compl + "|";
+			if (i > 0)
+				compl = compl + "|";
 
-      compl = compl + jsilConfig.contentRoot.replace(/^(?:\.\/)+/, "") + filename + extension;
+			compl = compl + jsilConfig.contentRoot.replace(/^(?:\.\/)+/, "") + filename + extension;
 
-      //mimeType = this.getMimeType(extension, mimeType);
+			//mimeType = this.getMimeType(extension, mimeType);
 
-      //if (this.canPlayType(mimeType)) {
-      //  if (outMimeType)
-      //    outMimeType[0] = mimeType;
+			//if (this.canPlayType(mimeType)) {
+			//  if (outMimeType)
+			//    outMimeType[0] = mimeType;
 
-      //  return jsilConfig.contentRoot + filename + extension;
-      //}
-    }
+			//  return jsilConfig.contentRoot + filename + extension;
+			//}
+		}
 
-    return compl;
+		return compl;
+	}
   };
 
   if (audioInfo.hasAudioContext) {
