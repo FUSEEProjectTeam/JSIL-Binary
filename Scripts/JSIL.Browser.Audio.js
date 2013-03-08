@@ -400,7 +400,7 @@ function initSoundLoader () {
     var compl = "";
 
 	if (data.formats === undefined)
-	{alert(filename);
+	{
 		return jsilConfig.contentRoot.replace(/^(?:\.\/)+/, "") + filename;
 	} else {	
 		for (var i = 0; i < data.formats.length; i++) {
