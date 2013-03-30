@@ -181,6 +181,7 @@ var $jsilloaderstate = {
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.DateTime.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.Text.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.Resources.js");
+  environment.loadScript(libraryRoot + "JSIL.Bootstrap.Linq.js");
 
   if (config.testFixture || environment.getUserSetting("testFixture"))
     environment.loadScript(libraryRoot + "JSIL.TestFixture.js");
@@ -212,31 +213,7 @@ var $jsilloaderstate = {
   for (var i = 0, l = manifests.length; i < l; i++)
     environment.loadScript(manifestRoot + manifests[i] + ".manifest.js");
 
-  if (config.winForms) {
-    contentManifest["JSIL"].push(["Library", "System.Drawing.js"]);
-    contentManifest["JSIL"].push(["Library", "System.Windows.js"]);
-  }
-
-  if (config.xna) {
-    contentManifest["JSIL"].push(["Library", "JSIL.XNA.Core.js"]);
-
-    switch (Number(config.xna)) {
-      case 3:
-        contentManifest["JSIL"].push(["Library", "JSIL.XNA3.js"]);
-        break;
-      case 4:
-        contentManifest["JSIL"].push(["Library", "JSIL.XNA4.js"]);
-        break;
-      default:
-        throw new Error("Unsupported XNA version");
-    }
-
-    contentManifest["JSIL"].push(["Library", "JSIL.XNA.Content.js"]);
-    contentManifest["JSIL"].push(["Library", "JSIL.XNA.Graphics.js"]);
-    contentManifest["JSIL"].push(["Library", "JSIL.XNA.Input.js"]);
-    contentManifest["JSIL"].push(["Library", "JSIL.XNA.Audio.js"]);
-    contentManifest["JSIL"].push(["Library", "JSIL.XNA.Storage.js"]);
-  }
+  contentManifest["JSIL"].push(["Library", "JSIL.XNA.Core.js"]);
 
   if (config.readOnlyStorage)
     contentManifest["JSIL"].push(["Library", "JSIL.ReadOnlyStorage.js"]);

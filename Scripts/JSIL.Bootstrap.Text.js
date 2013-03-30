@@ -351,13 +351,15 @@ JSIL.ImplementExternals(
 
     $.Method({Static: false, Public: true }, ".ctor",
       new JSIL.MethodSignature(null, [$jsilcore.TypeRef("System.Array", [$jsilcore.TypeRef("System.Char")]), "System.Int32", "System.Int32"], [], $jsilcore),
-      JSIL.StringFromCharArray
+      function (chars, start, length) {
+        return new String(JSIL.StringFromCharArray(chars, start, length));
+      }
     );
 
     $.Method({Static: false, Public: true }, ".ctor",
       new JSIL.MethodSignature(null, [$jsilcore.TypeRef("System.Array", [$jsilcore.TypeRef("System.Char")])], [], $jsilcore),
       function (chars) {
-        return JSIL.StringFromCharArray(chars, 0, chars.length);
+        return new String(JSIL.StringFromCharArray(chars, 0, chars.length));
       }
     );
 
@@ -368,7 +370,7 @@ JSIL.ImplementExternals(
         for (var i = 0; i < length; i++)
           arr[i] = ch;
         
-        return arr.join("");
+        return new String(arr.join(""));
       }
     );
 
@@ -776,27 +778,6 @@ $jsilcore.makeCharacterReader = function (str) {
 };
 
 JSIL.ImplementExternals("System.Text.Encoding", function ($) {
-  $.Method({Static:true , Public:true }, ".cctor2", 
-    (new JSIL.MethodSignature(null, [], [])),
-    function () {
-      // This type already has a cctor so we add a second one.
-      System.Text.Encoding.asciiEncoding = JSIL.CreateInstanceOfType(
-        System.Text.ASCIIEncoding.__Type__, "$fromCharset", ["US-ASCII"]
-      );
-
-      System.Text.Encoding.utf8Encoding = JSIL.CreateInstanceOfType(
-        System.Text.UTF8Encoding.__Type__, "$fromCharset", ["UTF-8"]
-      );
-
-      System.Text.Encoding.utf7Encoding = JSIL.CreateInstanceOfType(
-        System.Text.UTF7Encoding.__Type__, "$fromCharset", ["UTF-7"]
-      );
-
-      System.Text.Encoding.unicodeEncoding = new $jsilcore.System.Text.UnicodeEncoding(false, true);
-      System.Text.Encoding.bigEndianUnicodeEncoding = new $jsilcore.System.Text.UnicodeEncoding(true, true);
-    }
-  );
-
   $.RawMethod(false, "$fromCharset", function (charset) {
     this._charset = charset;
     this.fallbackCharacter = "?";
@@ -868,6 +849,11 @@ JSIL.ImplementExternals("System.Text.Encoding", function ($) {
   $.Method({Static:true , Public:true }, "get_ASCII", 
     (new JSIL.MethodSignature($.Type, [], [])),
     function () {
+      if (!System.Text.Encoding.asciiEncoding)
+        System.Text.Encoding.asciiEncoding = JSIL.CreateInstanceOfType(
+          System.Text.ASCIIEncoding.__Type__, "$fromCharset", ["US-ASCII"]
+        );
+
       return System.Text.Encoding.asciiEncoding;
     }
   );
@@ -875,6 +861,11 @@ JSIL.ImplementExternals("System.Text.Encoding", function ($) {
   $.Method({Static:true , Public:true }, "get_UTF8", 
     (new JSIL.MethodSignature($.Type, [], [])),
     function () {
+      if (!System.Text.Encoding.utf8Encoding)
+        System.Text.Encoding.utf8Encoding = JSIL.CreateInstanceOfType(
+          System.Text.UTF8Encoding.__Type__, "$fromCharset", ["UTF-8"]
+        );
+
       return System.Text.Encoding.utf8Encoding;
     }
   );
@@ -882,6 +873,11 @@ JSIL.ImplementExternals("System.Text.Encoding", function ($) {
   $.Method({Static:true , Public:true }, "get_UTF7", 
     (new JSIL.MethodSignature($.Type, [], [])),
     function () {
+      if (!System.Text.Encoding.utf7Encoding)
+        System.Text.Encoding.utf7Encoding = JSIL.CreateInstanceOfType(
+          System.Text.UTF7Encoding.__Type__, "$fromCharset", ["UTF-7"]
+        );
+
       return System.Text.Encoding.utf7Encoding;
     }
   );
@@ -889,6 +885,9 @@ JSIL.ImplementExternals("System.Text.Encoding", function ($) {
   $.Method({Static:true , Public:true }, "get_Unicode", 
     (new JSIL.MethodSignature($.Type, [], [])),
     function () {
+      if (!System.Text.Encoding.unicodeEncoding)
+        System.Text.Encoding.unicodeEncoding = new $jsilcore.System.Text.UnicodeEncoding(false, true);
+
       return System.Text.Encoding.unicodeEncoding;
     }
   );
@@ -896,6 +895,9 @@ JSIL.ImplementExternals("System.Text.Encoding", function ($) {
   $.Method({Static:true , Public:true }, "get_BigEndianUnicode", 
     (new JSIL.MethodSignature($.Type, [], [])),
     function () {
+      if (!System.Text.Encoding.bigEndianUnicodeEncoding)
+        System.Text.Encoding.bigEndianUnicodeEncoding = new $jsilcore.System.Text.UnicodeEncoding(true, true);
+
       return System.Text.Encoding.bigEndianUnicodeEncoding;
     }
   );

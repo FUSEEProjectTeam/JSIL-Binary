@@ -197,6 +197,9 @@ if (!JSIL.GetAssembly("mscorlib", true)) {
     $.Property({Static: false, Public: true }, "EndOfStream");
   });
 
+  JSIL.MakeClass($jsilcore.TypeRef("System.Object"), "System.IO.TextWriter", true, [], function ($) {
+  });
+
 }
 
 var $jsilio = JSIL.DeclareAssembly("JSIL.IO");
@@ -276,7 +279,7 @@ JSIL.ImplementExternals("System.IO.File", function ($) {
       var fromResolved = storageRoot.resolvePath(from, false);
 
       if (!fromResolved || fromResolved.type !== "file")
-        throw new System.FileNotFoundException(from);
+        throw new System.IO.FileNotFoundException(from);
 
       var toResolved = storageRoot.createFile(to, overwrite);
       if (!toResolved)
@@ -314,7 +317,7 @@ JSIL.ImplementExternals("System.IO.File", function ($) {
 
   $.Method({Static:true , Public:true }, "ReadAllText", 
     new JSIL.MethodSignature($.String, [$.String], []),
-    function (filename) {
+    function ReadAllText (filename) {
       var storageRoot = JSIL.Host.getStorageRoot();
 
       if (storageRoot) {
@@ -322,6 +325,26 @@ JSIL.ImplementExternals("System.IO.File", function ($) {
 
         if (resolved && resolved.type === "file")
           return JSIL.StringFromByteArray(resolved.readAllBytes());
+        else
+          throw new System.IO.FileNotFoundException(filename);
+      }
+
+      throw new System.NotImplementedException("No storage root available");
+    }
+  );
+
+  $.Method({Static:true , Public:true }, "ReadAllBytes", 
+    new JSIL.MethodSignature($jsilcore.TypeRef("System.Array", [$.Byte]), [$.String], []),
+    function ReadAllBytes (filename) {
+      var storageRoot = JSIL.Host.getStorageRoot();
+
+      if (storageRoot) {
+        var resolved = storageRoot.resolvePath(filename, false);
+
+        if (resolved && resolved.type === "file")
+          return resolved.readAllBytes();
+        else
+          throw new System.IO.FileNotFoundException(filename);
       }
 
       throw new System.NotImplementedException("No storage root available");
@@ -1069,13 +1092,13 @@ JSIL.ImplementExternals("System.IO.BinaryReader", function ($) {
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.Array", [$.Char]), [$.Int32], [])), 
     function ReadChars (count) {
       var result = new Array(count);
+
       for (var i = 0; i < count; i++) {
-        // FIXME: This should probably be ReadChar?
-        var b = this.m_stream.ReadByte();
-        if (b === -1)
+        var ch = $jsilio.ReadCharFromStream(this.m_stream, this.m_encoding);
+        if (ch === -1)
           return result.slice(0, i - 1);
 
-        result[i] = String.fromCharCode(b);
+        result[i] = ch;
       };
 
       return result;
@@ -1137,8 +1160,9 @@ JSIL.ImplementExternals("System.IO.BinaryReader", function ($) {
       if (size <= 0)
         return "";
 
-      var bytes = this.ReadBytes(size);
-      return JSIL.StringFromByteArray(bytes);
+      var bytes = this.$readBytesTemp(size);
+      var result = this.m_encoding.$decode(bytes, 0, size);
+      return result;
     }
   );
 

@@ -68,7 +68,11 @@ JSIL.Host.getFileTime = function () {
 
 JSIL.Host.getCanvas = function (desiredWidth, desiredHeight) {
   var svc = JSIL.Host.getService("canvas");
-  return svc.get(desiredWidth, desiredHeight);
+
+  if (arguments.length === 2)
+    return svc.get(desiredWidth, desiredHeight);
+  else
+    return svc.get();
 };
 
 JSIL.Host.createCanvas = function (desiredWidth, desiredHeight) {
@@ -115,6 +119,19 @@ JSIL.Host.runLater = function (action) {
 
   svc.enqueue(action);
   return true;
+};
+
+JSIL.Host.runLaterFlush = function () {
+  var svc = JSIL.Host.getService("runLater", true);
+  if (!svc)
+    return false;
+
+  if (svc.flush) {
+    svc.flush();
+    return true;
+  }
+
+  return false;
 };
 
 JSIL.Host.logWrite = function (text) {

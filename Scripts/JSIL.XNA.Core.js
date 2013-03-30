@@ -11,8 +11,6 @@ $jsilxna.allowWebGL = true;
 $jsilxna.testedWebGL = false;
 $jsilxna.workingWebGL = false;
 
-var $sig = new JSIL.MethodSignatureCache();
-
 var $xnaasms = new JSIL.AssemblyCollection({
   corlib: "mscorlib",
   xna: "Microsoft.Xna.Framework",
@@ -22,6 +20,7 @@ var $xnaasms = new JSIL.AssemblyCollection({
   0: "Microsoft.Xna.Framework", 
   1: "Microsoft.Xna.Framework.Game", 
   2: "Microsoft.Xna.Framework.GamerServices", 
+  4: "Microsoft.Xna.Framework.Input.Touch, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553", 
   5: "mscorlib",
   11: "System.Drawing", 
   15: "System.Windows.Forms", 
@@ -129,6 +128,16 @@ JSIL.MakeClass("SoundAssetBase", "CallbackSoundAsset", true, [], function ($) {
 });
 
 JSIL.MakeClass("HTML5Asset", "RawXNBAsset", true, [], function ($) {
+  var $NewCr = function () {
+    return ($NewCr = JSIL.Memoize(
+      new JSIL.ConstructorSignature($xnaasms[0].TypeRef("Microsoft.Xna.Framework.Content.ContentReader"), [
+        $xnaasms[0].TypeRef("Microsoft.Xna.Framework.Content.ContentManager"), $xnaasms[5].TypeRef("System.IO.Stream"), 
+        $.String, $xnaasms[5].TypeRef("System.Action`1", [$xnaasms[5].TypeRef("System.IDisposable")]), 
+        $.Int32
+      ])
+    )) ();
+  };
+
   $.Method({
     Static: false,
     Public: true
@@ -146,13 +155,13 @@ JSIL.MakeClass("HTML5Asset", "RawXNBAsset", true, [], function ($) {
     Static: false,
     Public: true
   }, "ReadAsset", new JSIL.MethodSignature(null, [], []), function RawXNBAsset_ReadAsset (type) {
+    if (!type)
+      throw new Error("ReadAsset must be provided a type object");
+
     var memoryStream = new System.IO.MemoryStream(this.bytes, false);
 
-    var tContentReader = JSIL.GetTypeFromAssembly(
-      $xnaasms.xna, "Microsoft.Xna.Framework.Content.ContentReader", [], true
-    );
-    var contentReader = $sig.get("newCr").Construct(
-      tContentReader, this.contentManager, memoryStream, this.name, null, 0
+    var contentReader = $NewCr().Construct(
+      this.contentManager, memoryStream, this.name, null, 0
     );
 
     contentReader.ReadHeader();
@@ -239,21 +248,25 @@ var vectorUtil = {
     }
   },
 
-  bindToPrototype: function (fn, typeRef) {
+  bindToPrototype: function (fn, typeRef, dataMembers) {
     var state = {
       resolvedType: null,
       typeRef: typeRef
     };
 
     JSIL.SetLazyValueProperty(
-      state, "create", 
+      state, "$instance", 
       function VectorMethod_GetCreator () {
         if (state.resolvedType === null)
           state.resolvedType = state.typeRef.get();
-        
-        var create = Object.create;
-        var proto = state.resolvedType.prototype;
-        return create.bind(Object, proto);
+
+        var creatorBody = "";
+        for (var i = 0; i < dataMembers.length; i++)
+          creatorBody += "this." + dataMembers[i] + " = " + dataMembers[i] + ";\r\n";
+
+        var creator = JSIL.CreateNamedFunction(state.resolvedType.__Type__.__FullName__, dataMembers, creatorBody, null);
+        creator.prototype = state.resolvedType.prototype;
+        return creator;
       }
     );
 
@@ -268,11 +281,11 @@ var vectorUtil = {
       throw new Error("Invalid type combination");
 
     var body = [];
-    body.push("var result = this.create();");
+    body.push("return new this.$instance(");
 
     for (var i = 0; i < dataMembers.length; i++) {
       var dataMember = dataMembers[i];
-      var line = "result." + dataMember + " = ";
+      var line = "";
 
       if (leftScalar)
         line += "lhs ";
@@ -282,17 +295,20 @@ var vectorUtil = {
       line += operator;
 
       if (rightScalar)
-        line += " rhs;";
+        line += " rhs";
       else
-        line += " rhs." + dataMember + ";";
+        line += " rhs." + dataMember + "";
+
+      if (i < (dataMembers.length - 1))
+        line += ",";
 
       body.push(line);
     }
 
-    body.push("return result;")
+    body.push(");")
 
     var fn = vectorUtil.makeOperatorCore(name, tResult, body, 2, leftScalar, rightScalar);
-    fn = vectorUtil.bindToPrototype(fn, tResult);
+    fn = vectorUtil.bindToPrototype(fn, tResult, dataMembers);
 
     $.Method({Static: true , Public: true }, name, 
       new JSIL.MethodSignature(tResult, [tLeft, tRight], []),
@@ -364,18 +380,22 @@ var vectorUtil = {
 
   makeNegationOperator: function ($, dataMembers, tVector) {
     var body = [];
-    body.push("var result = this.create();");
+    body.push("return new this.$instance(");
 
     for (var i = 0; i < dataMembers.length; i++) {
       var dataMember = dataMembers[i];
-      var line = "result." + dataMember + " = -value." + dataMember + ";";
+      var line = "-value." + dataMember;
+
+      if (i < (dataMembers.length - 1))
+        line += ",";
+
       body.push(line);
     }
 
-    body.push("return result;");
+    body.push(");");
 
     var fn = vectorUtil.makeOperatorCore("op_UnaryNegation", tVector, body, 1, false, false);
-    fn = vectorUtil.bindToPrototype(fn, tVector);
+    fn = vectorUtil.bindToPrototype(fn, tVector, dataMembers);
 
     $.Method({Static: true , Public: true }, "op_UnaryNegation", 
       new JSIL.MethodSignature(tVector, [tVector], []),
@@ -1198,7 +1218,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
   $.Method({
     Static: false,
     Public: true
-  }, "Initialize", new JSIL.MethodSignature(null, [], []), function () {    
+  }, "Initialize", new JSIL.MethodSignature(null, [], []), function Game_Initialize () {    
     this.initialized = true;
 
     for (var i = 0, l = this.components._size; i < l; i++) {
@@ -1230,7 +1250,8 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
   }, "ResetElapsedTime", new JSIL.MethodSignature(null, [], []), function () {
     this.forceElapsedTimeToZero = true;
   });
-  $.RawMethod(false, "$ComponentsOfType", function (type) {
+
+  $.RawMethod(false, "$ComponentsOfType", function Game_$ComponentsOfType (type) {
     var result = new Array();
     for (var i = 0, l = this.components._size; i < l; i++) {
       var item = this.components._items[i];
@@ -1284,7 +1305,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
   $.Method({
     Static: false,
     Public: true
-  }, "Run", new JSIL.MethodSignature(null, [], []), function () {
+  }, "Run", new JSIL.MethodSignature(null, [], []), function Game_Run () {
     this._profilingMode = (document.location.search.indexOf("profile") >= 0);
     this._balanceFPSCheckbox = (document.getElementById("balanceFramerate") || null);
     if (this._balanceFPSCheckbox)
@@ -1295,7 +1316,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
     this._QueueStep();
   });
 
-  $.RawMethod(false, "_QueueStep", function Game_EnqueueTick () {
+  $.RawMethod(false, "_QueueStep", function Game_QueueStep () {
     if (Microsoft.Xna.Framework.Game._QuitForced || this._isDead) 
       return;
 
@@ -1517,14 +1538,14 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Game", function ($) {
   $.Method({
     Static: false,
     Public: true
-  }, "Exit", new JSIL.MethodSignature(null, [], []), function () {
+  }, "Exit", new JSIL.MethodSignature(null, [], []), function Game_Exit () {
     this.Dispose();
   });
 
   $.Method({
     Static: false,
     Public: true
-  }, "Dispose", new JSIL.MethodSignature(null, [], []), function () {
+  }, "Dispose", new JSIL.MethodSignature(null, [], []), function Game_Dispose () {
     this.UnloadContent();
 
     this._isDead = true;
@@ -1769,7 +1790,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Rectangle", function ($) {
 
     if (x2 > x1 && y2 > y1) 
       return new Microsoft.Xna.Framework.Rectangle(
-        x1, y1, (x2 - x1) | 0, (y2 - y1) | 0
+        x1 | 0, y1 | 0, (x2 - x1) | 0, (y2 - y1) | 0
       );
 
     return Microsoft.Xna.Framework.Rectangle._empty;
@@ -1803,7 +1824,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Rectangle", function ($) {
 
     if (x2 > x1 && y2 > y1) 
       return new Microsoft.Xna.Framework.Rectangle(
-        x1, y1, (x2 - x1) | 0, (y2 - y1) | 0
+        x1 | 0, y1 | 0, (x2 - x1) | 0, (y2 - y1) | 0
       );
 
     return Microsoft.Xna.Framework.Rectangle._empty;
@@ -1830,10 +1851,10 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Rectangle", function ($) {
           $.Int32, $.Int32
         ], [])), 
     function _ctor (x, y, width, height) {
-      this.X = x;
-      this.Y = y;
-      this.Width = width;
-      this.Height = height;
+      this.X = x | 0;
+      this.Y = y | 0;
+      this.Width = width | 0;
+      this.Height = height | 0;
     }
   );
 
@@ -1915,10 +1936,10 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Rectangle", function ($) {
   $.Method({Static:false, Public:true }, "Inflate", 
     (new JSIL.MethodSignature(null, [$.Int32, $.Int32], [])), 
     function Inflate (x, y) {
-      this.X -= x;
-      this.Y -= y;
-      this.Width += (x * 2);
-      this.Height += (y * 2);
+      this.X = (this.X - x) | 0;
+      this.Y = (this.Y - y) | 0;
+      this.Width = (this.Width + (x * 2)) | 0;
+      this.Height = (this.Height + (y * 2)) | 0;
     }
   );
 
@@ -1935,24 +1956,24 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Rectangle", function ($) {
   $.Method({Static:false, Public:true }, "OffsetPoint", 
     (new JSIL.MethodSignature(null, [$xnaasms[0].TypeRef("Microsoft.Xna.Framework.Point")], [])), 
     function OffsetPoint (amount) {
-      this.X += amount.X;
-      this.Y += amount.Y;
+      this.X = (this.X + amount.X) | 0;
+      this.Y = (this.Y + amount.Y) | 0;
     }
   );
 
   $.Method({Static:false, Public:true }, "Offset", 
     (new JSIL.MethodSignature(null, [$.Int32, $.Int32], [])), 
     function Offset (offsetX, offsetY) {
-      this.X += offsetX;
-      this.Y += offsetY;
+      this.X = (this.X + offsetX) | 0;
+      this.Y = (this.Y + offsetY) | 0;
     }
   );
 
   $.Method({Static:false, Public:true }, "set_Location", 
     (new JSIL.MethodSignature(null, [$xnaasms[0].TypeRef("Microsoft.Xna.Framework.Point")], [])), 
     function set_Location (value) {
-      this.X = value.X;
-      this.Y = value.Y;
+      this.X = value.X | 0;
+      this.Y = value.Y | 0;
 
       return value;
     }
@@ -1977,8 +1998,8 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Point", function ($) {
   $.Method({Static:false, Public:true }, ".ctor", 
     (new JSIL.MethodSignature(null, [$.Int32, $.Int32], [])), 
     function _ctor (x, y) {
-      this.X = x;
-      this.Y = y;
+      this.X = x | 0;
+      this.Y = y | 0;
     }
   );
 
@@ -2394,9 +2415,14 @@ $jsilxna.Color = function ($) {
 };
 
 $jsilxna.ClampByte = function (v) {
-  if (v < 0) return 0;
-  else if (v > 255) return 255;
-  else return Math.floor(v);
+  v = (v | 0);
+
+  if (v < 0) 
+    return 0;
+  else if (v > 255) 
+    return 255;
+  else 
+    return v;
 };
 
 (function () {
@@ -2846,7 +2872,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.GameWindow", function ($) {
       var canvas = JSIL.Host.getCanvas();
 
       this._clientBounds = new Microsoft.Xna.Framework.Rectangle(
-        0, 0, canvas.width, canvas.height
+        0, 0, canvas.width | 0, canvas.height | 0
       );
     }
   );

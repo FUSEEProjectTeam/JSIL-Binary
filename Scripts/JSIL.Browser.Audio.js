@@ -14,7 +14,12 @@ JSIL.Audio.InstancePrototype = {
       this.$pause();
   },
   dispose: function () {
-    // TODO: Return to free instance pool    
+    // TODO: Return to free instance pool
+
+    if (this.$dispose)
+      this.$dispose();
+    else
+      this.pause();
   },
   get_volume: function () {
     if (this.$get_volume)
@@ -69,9 +74,20 @@ JSIL.Audio.HTML5Instance = function (audioInfo, node, loop) {
   this.node = node;
   this.node.loop = loop;
 
-  this.node.addEventListener("ended", this.on_ended.bind(this), true);
+  this.$bindEvents();
 };
 JSIL.Audio.HTML5Instance.prototype = Object.create(JSIL.Audio.InstancePrototype);
+
+JSIL.Audio.HTML5Instance.prototype.$bindEvents = function () {
+  this.$onEndedListener = JSIL.Browser.RegisterOneShotEventListener(this.node, "ended", true, this.on_ended.bind(this));
+};
+
+JSIL.Audio.HTML5Instance.prototype.$unbindEvents = function () {
+  if (this.$onEndedListener)
+    this.$onEndedListener.unregister();
+  
+  this.$onEndedListener = null;
+};
 
 JSIL.Audio.HTML5Instance.prototype.$play = function () {
   this.node.play();
@@ -98,6 +114,21 @@ JSIL.Audio.HTML5Instance.prototype.on_ended = function () {
   this.dispose();
 };
 
+JSIL.Audio.HTML5Instance.prototype.$dispose = function () {
+  this.node.pause();
+
+  // Manually unregister the event listener because apparently it's 1996 and 
+  //  browser GCs still can't actually collect cycles
+  this.$unbindEvents();
+  
+  // HACK: This forces Gecko-based browsers to free the resources previously 
+  //  used for audio playback.
+  try {
+    this.node.removeAttribute("src");
+    this.node.load();
+  } catch (exc) {
+  }
+};
 
 JSIL.Audio.WebKitInstance = function (audioInfo, buffer, loop) {
   this.bufferSource = audioInfo.audioContext.createBufferSource();
@@ -144,7 +175,6 @@ JSIL.Audio.WebKitInstance.prototype.$get_isPlaying = function () {
   return (elapsed <= this.bufferSource.buffer.duration);
 }
 
-
 JSIL.Audio.NullInstance = function (audioInfo, loop) {  
 };
 JSIL.Audio.NullInstance.prototype = Object.create(JSIL.Audio.InstancePrototype);
@@ -170,7 +200,7 @@ function loadNullSound (audioInfo, filename, data, onError, onDoneLoading) {
 
 function loadWebkitSound (audioInfo, filename, data, onError, onDoneLoading) {
   var handleError = function (text) {
-    JSIL.Host.warning(new Error("Error while loading '" + filename + "': " + text));
+    JSIL.Host.warning("Error while loading '" + filename + "': " + text);
     return loadNullSound(audioInfo, filename, data, onError, onDoneLoading);
   };
 
@@ -208,7 +238,7 @@ function loadWebkitSound (audioInfo, filename, data, onError, onDoneLoading) {
 
 function loadStreamingSound (audioInfo, filename, data, onError, onDoneLoading) {
   var handleError = function (text) {
-    JSIL.Host.warning(new Error(text));
+    JSIL.Host.warning(text);
     return loadNullSound(audioInfo, filename, data, onError, onDoneLoading);
   };
 
@@ -237,7 +267,7 @@ function loadStreamingSound (audioInfo, filename, data, onError, onDoneLoading) 
 
 function loadBufferedHTML5Sound (audioInfo, filename, data, onError, onDoneLoading) {
   var handleError = function (text) {
-    JSIL.Host.warning(new Error(text));
+    JSIL.Host.warning(text);
     return loadNullSound(audioInfo, filename, data, onError, onDoneLoading);
   };
 
@@ -279,7 +309,7 @@ function loadBufferedHTML5Sound (audioInfo, filename, data, onError, onDoneLoadi
 
 function loadHTML5Sound (audioInfo, filename, data, onError, onDoneLoading) {
   var handleError = function (text) {
-    JSIL.Host.warning(new Error(text));
+    JSIL.Host.warning(text);
     return loadNullSound(audioInfo, filename, data, onError, onDoneLoading);
   };
 

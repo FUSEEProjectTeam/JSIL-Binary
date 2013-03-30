@@ -47,20 +47,27 @@ JSIL.Browser.CanvasService.prototype.applySize = function (element, desiredWidth
   }
 
   element.actualWidth = desiredWidth;
-  element.actualHeight = desiredHeight;  
-  element.width = width;
-  element.height = height;
+  element.actualHeight = desiredHeight;
+
+  if (element.width !== width)
+    element.width = width;
+
+  if (element.height !== height)
+    element.height = height;
 }
 
 JSIL.Browser.CanvasService.prototype.get = function (desiredWidth, desiredHeight) {
   var e = document.getElementById("canvas");
-  this.applySize(e, desiredWidth, desiredHeight, true);
+
+  if (arguments.length === 2)
+    this.applySize(e, desiredWidth, desiredHeight, true);
   
   return e;
 };
 
 JSIL.Browser.CanvasService.prototype.create = function (desiredWidth, desiredHeight) {
   var e = document.createElement("canvas");
+  
   this.applySize(e, desiredWidth, desiredHeight, false);
   
   return e;
@@ -1440,4 +1447,41 @@ function hideSaveRecordingDialog (evt) {
     Microsoft.Xna.Framework.Game.ForceUnpause();
   } catch (exc) {
   }  
+};
+
+JSIL.Browser.OneShotEventListenerCount = 0;
+
+JSIL.Browser.$MakeWrappedListener = function (listener, notification) {
+  return function WrappedEventListener () {
+    notification();
+
+    return listener.apply(this, arguments);
+  };
+};
+
+JSIL.Browser.RegisterOneShotEventListener = function (element, eventName, capture, listener) {
+  var registered = true;
+  var unregister, wrappedListener;
+
+  unregister = function () {
+    if (registered) {
+      registered = false;
+      element.removeEventListener(eventName, wrappedListener, capture);
+      JSIL.Browser.OneShotEventListenerCount -= 1;
+
+      wrappedListener = null;
+      element = null;
+    }
+  };
+
+  wrappedListener = JSIL.Browser.$MakeWrappedListener(listener, unregister);
+  listener = null;
+
+  JSIL.Browser.OneShotEventListenerCount += 1;
+  element.addEventListener(eventName, wrappedListener, capture);
+
+  return {
+    eventName: eventName,
+    unregister: unregister
+  }
 };
