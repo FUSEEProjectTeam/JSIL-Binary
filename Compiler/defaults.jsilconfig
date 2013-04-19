@@ -3,7 +3,7 @@
   "Assemblies": {
     "Stubbed": [
       "mscorlib,",
-      "System.*",
+      "^System\\.*",
       "Microsoft.*",
 	  "Mono.*",
       "FSharp.Core"
