@@ -19,6 +19,7 @@
       "System\\.Runtime\\.DurableInstancing,",
       "System\\.Data\\.SqlXml,",
       "JSIL\\.Meta,",
+	  "protobuf-net,",
       "Mono.Posix.*"
     ]
   },
