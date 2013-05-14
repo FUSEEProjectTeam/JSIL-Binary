@@ -3,11 +3,9 @@
   "Assemblies": {
     "Stubbed": [
       "mscorlib,",
-      "System,",
-      "System\\.(.*),",
+      "^System\\.*",
       "Microsoft\\.(.*),",
-      "FSharp.Core",
-      "Mono.*"
+      "FSharp.Core,"
     ],
     "Ignored": [
       "Microsoft\\.VisualC,",
@@ -18,9 +16,7 @@
       "System\\.Runtime\\.Serialization\\.Formatters\\.Soap,",
       "System\\.Runtime\\.DurableInstancing,",
       "System\\.Data\\.SqlXml,",
-      "JSIL\\.Meta,",
-	  "protobuf-net,",
-      "Mono.Posix.*"
+      "JSIL\\.Meta,"
     ]
   },
   "ProfileSettings": {
