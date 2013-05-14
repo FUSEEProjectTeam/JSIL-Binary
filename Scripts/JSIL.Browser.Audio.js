@@ -1,17 +1,36 @@
 JSIL.Audio = {};
 
+JSIL.Audio.$WarnedAboutPan = false;
+JSIL.Audio.$WarnedAboutPitch = false;
+
 JSIL.Audio.InstancePrototype = {
   play: function () {
     this._isPlaying = true;
+    this._isPaused = false;
 
     if (this.$play)
       this.$play();
   },
   pause: function () {
     this._isPlaying = false;
+    this._isPaused = true;
 
     if (this.$pause)
       this.$pause();
+  },
+  resume: function () {
+    this._isPlaying = true;
+    this._isPaused = false;
+
+    if (this.$resume)
+      this.$resume();
+  },
+  stop: function () {
+    this._isPlaying = false;
+    this._isPaused = false;
+
+    if (this.$stop)
+      this.$stop();
   },
   dispose: function () {
     // TODO: Return to free instance pool
@@ -19,17 +38,51 @@ JSIL.Audio.InstancePrototype = {
     if (this.$dispose)
       this.$dispose();
     else
-      this.pause();
+      this.stop();
   },
   get_volume: function () {
-    if (this.$get_volume)
-      return this.$get_volume();
-    else
-      return 1;
+    return this._volume;
   },
   set_volume: function (value) {
+    this._volume = value;
+
     if (this.$set_volume)
-      this.$set_volume(value);
+      this.$set_volume(this._volume * this._volumeMultiplier);
+  },
+  get_volumeMultiplier: function () {
+    return this._volumeMultiplier;
+  },
+  set_volumeMultiplier: function (value) {
+    this._volumeMultiplier = value;
+
+    if (this.$set_volume)
+      this.$set_volume(this._volume * this._volumeMultiplier);
+  },
+  get_pan: function () {
+    return this._pan;
+  },
+  set_pan: function (value) {
+    this._pan = value;
+
+    if (this.$set_pan)
+      this.$set_pan(this._pan);
+    else if ((value !== 0) && (!JSIL.Audio.$WarnedAboutPan)) {
+      JSIL.Audio.$WarnedAboutPan = true;
+      JSIL.Host.warning("Your browser does not have an implementation of panning for sound effects.");
+    }
+  },
+  get_pitch: function () {
+    return this._pitch;
+  },
+  set_pitch: function (value) {
+    this._pitch = value;
+
+    if (this.$set_pitch)
+      this.$set_pitch(this._pitch);
+    else if ((value !== 0) && (!JSIL.Audio.$WarnedAboutPitch)) {
+      JSIL.Audio.$WarnedAboutPitch = true;
+      JSIL.Host.warning("Your browser does not have an implementation of pitch shifting for sound effects.");
+    }
   },
   get_loop: function () {
     return this._loop;
@@ -45,10 +98,23 @@ JSIL.Audio.InstancePrototype = {
       return this.$get_isPlaying();
     else
       return this._isPlaying;
+  },
+  get_isPaused: function () {
+    if (this.$get_isPaused)
+      return this.$get_isPaused();
+    else
+      return this._isPaused;
   }
 };
 
 Object.defineProperty(JSIL.Audio.InstancePrototype, "volume", {
+  get: JSIL.Audio.InstancePrototype.get_volume,
+  set: JSIL.Audio.InstancePrototype.set_volume,
+  configurable: true,
+  enumerable: true
+});
+
+Object.defineProperty(JSIL.Audio.InstancePrototype, "volumeMultiplier", {
   get: JSIL.Audio.InstancePrototype.get_volume,
   set: JSIL.Audio.InstancePrototype.set_volume,
   configurable: true,
@@ -68,11 +134,22 @@ Object.defineProperty(JSIL.Audio.InstancePrototype, "isPlaying", {
   enumerable: true
 });
 
+Object.defineProperty(JSIL.Audio.InstancePrototype, "isPaused", {
+  get: JSIL.Audio.InstancePrototype.get_isPaused,
+  configurable: true,
+  enumerable: true
+});
+
 
 JSIL.Audio.HTML5Instance = function (audioInfo, node, loop) {
   this._isPlaying = false;
+  this._isPaused = false;
   this.node = node;
   this.node.loop = loop;
+  this._volume = 1.0;
+  this._volumeMultiplier = 1.0;
+  this._pan = 0;
+  this._pitch = 0;
 
   this.$bindEvents();
 };
@@ -97,11 +174,20 @@ JSIL.Audio.HTML5Instance.prototype.$pause = function () {
   this.node.pause();
 }
 
-JSIL.Audio.HTML5Instance.prototype.$get_volume = function () {
-  return this.node.volume;
+JSIL.Audio.HTML5Instance.prototype.$resume = function () {
+  this.node.play();
+}
+
+JSIL.Audio.HTML5Instance.prototype.$stop = function () {
+  this.node.pause();
 }
 
 JSIL.Audio.HTML5Instance.prototype.$set_volume = function (value) {
+  if (value < 0)
+    value = 0;
+  else if (value > 1)
+    value = 1;
+  
   return this.node.volume = value;
 }
 
@@ -110,7 +196,7 @@ JSIL.Audio.HTML5Instance.prototype.$set_loop = function (value) {
 }
 
 JSIL.Audio.HTML5Instance.prototype.on_ended = function () {
-  this.isPlaying = false;
+  this._isPlaying = false;
   this.dispose();
 };
 
@@ -131,36 +217,129 @@ JSIL.Audio.HTML5Instance.prototype.$dispose = function () {
 };
 
 JSIL.Audio.WebKitInstance = function (audioInfo, buffer, loop) {
-  this.bufferSource = audioInfo.audioContext.createBufferSource();
-  this.gainNode = audioInfo.audioContext.createGainNode();
+  // This node is used for volume control
+  this.gainNode = audioInfo.audioContext.createGain();
 
-  this.bufferSource.buffer = buffer;
-  this.bufferSource.loop = loop;
+  // Ensure mono sources are converted up to stereo.
+  this.gainNode.channelCount = 2;
+  this.gainNode.channelCountMode = "explicit";
+  this.gainNode.channelInterpretation = "speakers";
 
-  this.bufferSource.connect(this.gainNode);
-  this.gainNode.connect(audioInfo.audioContext.destination);
+  // We need these to split out left/right channels and then recombine them (for panning)
+  this.channelSplitter = audioInfo.audioContext.createChannelSplitter(2);
+  this.channelMerger = audioInfo.audioContext.createChannelMerger(2);
+
+  // These two are used for left/right panning
+  this.gainNodeLeft = audioInfo.audioContext.createGain();
+
+  // Ensure gain is done on a single channel
+  this.gainNodeLeft.channelCount = 1;
+  this.gainNodeLeft.channelCountMode = "explicit";
+
+  this.gainNodeRight = audioInfo.audioContext.createGain();
+
+  // Ensure gain is done on a single channel
+  this.gainNodeRight.channelCount = 1;
+  this.gainNodeRight.channelCountMode = "explicit";
+
+  this.$createBufferSource = function () {
+    this.bufferSource = audioInfo.audioContext.createBufferSource();
+    this.bufferSource.buffer = buffer;
+    this.bufferSource.loop = loop;
+    // Input -> Gain (this converts mono up to stereo)
+    this.bufferSource.connect(this.gainNode);
+
+    this.$set_pitch(this._pitch);
+  };
+
+  // Gain -> Channels [0, 1]
+  this.gainNode.connect(this.channelSplitter);
+
+  // Channel 0 -> Left Gain
+  this.channelSplitter.connect(this.gainNodeLeft, 0, 0);
+  // Channel 1 -> Right Gain
+  this.channelSplitter.connect(this.gainNodeRight, 1, 0);
+
+  // Left Gain -> Channel 0
+  this.gainNodeLeft.connect(this.channelMerger, 0, 0);
+  // Right Gain -> Channel 1
+  this.gainNodeRight.connect(this.channelMerger, 0, 1);
+
+  // Channels [0, 1] -> Output
+  this.channelMerger.connect(audioInfo.audioContext.destination);
 
   this.context = audioInfo.audioContext;
   this.started = 0;
+  this.pausedAtOffset = null;
+
+  this._volume = 1.0;
+  this._volumeMultiplier = 1.0;
+  this._pan = 0;
+  this._pitch = 0;
 };
 JSIL.Audio.WebKitInstance.prototype = Object.create(JSIL.Audio.InstancePrototype);
 
 JSIL.Audio.WebKitInstance.prototype.$play = function () {
+  this.$createBufferSource();
   this.started = this.context.currentTime;
-  this.bufferSource.noteOn(0);
+  this.pausedAtOffset = null;
+  this.bufferSource.start(0);
 }
 
 JSIL.Audio.WebKitInstance.prototype.$pause = function () {
-  this.started = 0;
-  this.bufferSource.noteOff(0);
+  this.pausedAtOffset = this.context.currentTime - this.started;
+  this.$stop();
 }
 
-JSIL.Audio.WebKitInstance.prototype.$get_volume = function () {
-  return this.gainNode.gain.value;
+JSIL.Audio.WebKitInstance.prototype.$resume = function () {
+  // Apparently it's 1993 and audio APIs must precisely emulate analog
+  //  hardware characteristics instead of doing useful things
+  // http://stackoverflow.com/a/14715786
+  this.$createBufferSource();
+  this.started = this.context.currentTime - this.pausedAtOffset;
+  this.bufferSource.start(0, this.pausedAtOffset);
+  this.pausedAtOffset = null;
 }
+
+JSIL.Audio.WebKitInstance.prototype.$stop = function () {
+  this.started = 0;
+  this.bufferSource.stop(0);
+};
 
 JSIL.Audio.WebKitInstance.prototype.$set_volume = function (value) {
   this.gainNode.gain.value = value;
+}
+
+JSIL.Audio.WebKitInstance.prototype.$set_pan = function (value) {
+  if (value < 0) {
+    this.gainNodeLeft.gain.value = 1;
+    this.gainNodeRight.gain.value = 1 + value;    
+  } else if (value > 0) {
+    this.gainNodeLeft.gain.value = 1 - value;
+    this.gainNodeRight.gain.value = 1;
+  } else {
+    this.gainNodeLeft.gain.value = 1;
+    this.gainNodeRight.gain.value = 1;
+  }
+}
+
+JSIL.Audio.WebKitInstance.prototype.$set_pitch = function (value) {
+  if (!this.bufferSource)
+    return;
+
+  var ratio = Math.pow(2.0, value);
+
+  // Attempting to match the behavior of XAudio here
+  var min_ratio = 1 / 1024;
+  var max_ratio = 1024;
+
+  if (ratio < min_ratio)
+    ratio = min_ratio;
+  else if (ratio > max_ratio)
+    ratio = max_ratio;
+
+  // FIXME: The spec does not actually say what this property does...
+  this.bufferSource.playbackRate.value = ratio;
 }
 
 JSIL.Audio.WebKitInstance.prototype.$set_loop = function (value) {
@@ -176,6 +355,10 @@ JSIL.Audio.WebKitInstance.prototype.$get_isPlaying = function () {
 }
 
 JSIL.Audio.NullInstance = function (audioInfo, loop) {  
+  this._volume = 1.0;
+  this._volumeMultiplier = 1.0;
+  this._pan = 0;
+  this._pitch = 0;
 };
 JSIL.Audio.NullInstance.prototype = Object.create(JSIL.Audio.InstancePrototype);
 
@@ -465,12 +648,18 @@ function initSoundLoader () {
 
   if (audioInfo.hasAudioContext) {
     audioInfo.audioContext = new audioContextCtor();  
+
     // Firefox exposes the AudioContext ctor without actually implementing the API
     audioInfo.hasAudioContext =
       audioInfo.audioContext.decodeAudioData && 
       audioInfo.audioContext.createBufferSource &&
-      audioInfo.audioContext.createGainNode &&
+      audioInfo.audioContext.createGain &&
+      audioInfo.audioContext.createChannelSplitter &&
+      audioInfo.audioContext.createChannelMerger &&
       audioInfo.audioContext.destination;
+
+    if (!audioInfo.hasAudioContext)
+      JSIL.Host.warning("Your browser's implementation of the Web Audio API is broken and is being ignored by JSIL.");
   }
 
   assetLoaders["Sound"] = loadSoundGeneric.bind(null, audioInfo);
