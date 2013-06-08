@@ -19,7 +19,8 @@
       "System.Runtime.DurableInstancing,",
       "System.Data.SqlXml,",
       "JSIL.Meta,",
-      "Mono.Posix.*"
+      "Mono.Posix.*",
+      "protobuf-net.*"
     ]
   },
   "ProfileSettings": {
