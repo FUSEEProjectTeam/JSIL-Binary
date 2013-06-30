@@ -87,9 +87,7 @@ var $jsilloaderstate = {
     this.loadScript(libraryRoot + "JSIL.Browser.js");
     this.loadScript(libraryRoot + "JSIL.Browser.Audio.js");
     this.loadScript(libraryRoot + "JSIL.Browser.Loaders.js");
-
-    if (this.config.touch)
-      this.loadScript(libraryRoot + "JSIL.Browser.Touch.js");
+    this.loadScript(libraryRoot + "JSIL.Browser.Touch.js");
   };
 
 
@@ -174,6 +172,7 @@ var $jsilloaderstate = {
   environment.loadEnvironmentScripts();
   
   environment.loadScript(libraryRoot + "JSIL.Core.Types.js");
+  environment.loadScript(libraryRoot + "JSIL.Core.Reflection.js");
   environment.loadScript(libraryRoot + "JSIL.References.js");
   environment.loadScript(libraryRoot + "JSIL.Unsafe.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.js");

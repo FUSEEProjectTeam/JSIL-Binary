@@ -7,6 +7,8 @@ var $useTextCaching = true, $textCachingSupported = true;
 
 var $jsilxna = JSIL.DeclareAssembly("JSIL.XNA");
 
+JSIL.DeclareNamespace("JSIL");
+
 $jsilxna.allowWebGL = true;
 $jsilxna.testedWebGL = false;
 $jsilxna.workingWebGL = false;
@@ -285,7 +287,7 @@ var vectorUtil = {
 
     for (var i = 0; i < dataMembers.length; i++) {
       var dataMember = dataMembers[i];
-      var line = "";
+      var line = "+(";
 
       if (leftScalar)
         line += "lhs ";
@@ -298,6 +300,8 @@ var vectorUtil = {
         line += " rhs";
       else
         line += " rhs." + dataMember + "";
+
+      line += ")";
 
       if (i < (dataMembers.length - 1))
         line += ",";
@@ -427,12 +431,12 @@ var vectorUtil = {
 
   makeDistanceFunction: function ($, name, isSquared, dataMembers, tVector) {
     var body = [];
-    body.push("var result = 0, current;");
+    body.push("var result = +0.0, current;");
 
     for (var i = 0; i < dataMembers.length; i++) {
       var dataMember = dataMembers[i];
 
-      body.push("current = (rhs." + dataMember + " - lhs." + dataMember + ");");
+      body.push("current = +(rhs." + dataMember + " - lhs." + dataMember + ");");
       body.push("result += (current * current);");
     }
 
@@ -451,7 +455,7 @@ var vectorUtil = {
 
   makeNormalizer: function ($, dataMembers, tVector) {
     var body = [];
-    body.push("var factor = 1.0 / this.Length();");
+    body.push("var factor = +1.0 / this.Length();");
 
     for (var i = 0; i < dataMembers.length; i++) {
       var dataMember = dataMembers[i];
@@ -605,14 +609,14 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Vector2", function ($) {
     Static: false,
     Public: true
   }, ".ctor", new JSIL.MethodSignature(null, [$.Single, $.Single], []), function Vector2_ctor (x, y) {
-    this.X = x;
-    this.Y = y;
+    this.X = +x;
+    this.Y = +y;
   });
   $.Method({
     Static: false,
     Public: true
   }, ".ctor", new JSIL.MethodSignature(null, [$.Single], []), function Vector2_ctor (value) {
-    this.X = this.Y = value;
+    this.X = this.Y = +value;
   });
 });
 
@@ -641,23 +645,23 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Vector3", function ($) {
     Static: false,
     Public: true
   }, ".ctor", new JSIL.MethodSignature(null, [$.Single, $.Single, $.Single], []), function Vector3_ctor (x, y, z) {
-    this.X = x;
-    this.Y = y;
-    this.Z = z;
+    this.X = +x;
+    this.Y = +y;
+    this.Z = +z;
   });
   $.Method({
     Static: false,
     Public: true
   }, ".ctor", new JSIL.MethodSignature(null, [$.Single], []), function Vector3_ctor (value) {
-    this.X = this.Y = this.Z = value;
+    this.X = this.Y = this.Z = +value;
   });
   $.Method({
     Static: false,
     Public: true
-  }, ".ctor", new JSIL.MethodSignature(null, [], []), function Vector3_ctor (xy, z) {
-    this.X = xy.X;
-    this.Y = xy.Y;
-    this.Z = z;
+  }, ".ctor", new JSIL.MethodSignature(null, [$xnaasms[0].TypeRef("Microsoft.Xna.Framework.Vector2"), $.Single], []), function Vector3_ctor (xy, z) {
+    this.X = +xy.X;
+    this.Y = +xy.Y;
+    this.Z = +z;
   });
 
   $.Method({Static:true , Public:true }, "Transform", 
@@ -688,34 +692,34 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Vector4", function ($) {
     Static: false,
     Public: true
   }, ".ctor", new JSIL.MethodSignature(null, [$.Single, $.Single, $.Single, $.Single], []), function Vector4_ctor (x, y, z, w) {
-    this.X = x;
-    this.Y = y;
-    this.Z = z;
-    this.W = w;
+    this.X = +x;
+    this.Y = +y;
+    this.Z = +z;
+    this.W = +w;
   });
   $.Method({
     Static: false,
     Public: true
-  }, ".ctor", new JSIL.MethodSignature(null, [], []), function Vector4_ctor (xy, z, w) {
-    this.X = xy.X;
-    this.Y = xy.Y;
-    this.Z = z;
-    this.W = w;
+  }, ".ctor", new JSIL.MethodSignature(null, [$xnaasms[0].TypeRef("Microsoft.Xna.Framework.Vector2"), $.Single, $.Single], []), function Vector4_ctor (xy, z, w) {
+    this.X = +xy.X;
+    this.Y = +xy.Y;
+    this.Z = +z;
+    this.W = +w;
   });
   $.Method({
     Static: false,
     Public: true
-  }, ".ctor", new JSIL.MethodSignature(null, [], []), function Vector4_ctor (xyz, w) {
-    this.X = xyz.X;
-    this.Y = xyz.Y;
-    this.Z = xyz.Z;
-    this.W = w;
+  }, ".ctor", new JSIL.MethodSignature(null, [$xnaasms[0].TypeRef("Microsoft.Xna.Framework.Vector3"), $.Single], []), function Vector4_ctor (xyz, w) {
+    this.X = +xyz.X;
+    this.Y = +xyz.Y;
+    this.Z = +xyz.Z;
+    this.W = +w;
   });
   $.Method({
     Static: false,
     Public: true
   }, ".ctor", new JSIL.MethodSignature(null, [$.Single], []), function Vector4_ctor (value) {
-    this.X = this.Y = this.Z = this.W = value;
+    this.X = this.Y = this.Z = this.W = +value;
   });
 
   $.Method({Static:true , Public:true }, "Transform", 
@@ -1750,10 +1754,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.GameTime", function ($) {
 });
 
 JSIL.ImplementExternals("Microsoft.Xna.Framework.Rectangle", function ($) {
-  $.Method({
-    Static: true,
-    Public: true
-  }, ".cctor", new JSIL.MethodSignature(null, [], []), function () {
+  $.RawMethod(true, ".cctor2", function () {
     Microsoft.Xna.Framework.Rectangle._empty = new Microsoft.Xna.Framework.Rectangle();
   });
 
@@ -1982,10 +1983,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Rectangle", function ($) {
 });
 
 JSIL.ImplementExternals("Microsoft.Xna.Framework.Point", function ($) {
-  $.Method({
-    Static: true,
-    Public: true
-  }, ".cctor", new JSIL.MethodSignature(null, [], []), function () {
+  $.RawMethod(true, ".cctor2", function () {
     Microsoft.Xna.Framework.Point._zero = new Microsoft.Xna.Framework.Point();
   });
 
@@ -2131,10 +2129,7 @@ $jsilxna.Color = function ($) {
     target.b = source.b;
   });
 
-  $.Method({
-    Static: true,
-    Public: false
-  }, ".cctor", new JSIL.MethodSignature(null, [], []), function () {
+  $.RawMethod(true, ".cctor2", function () {
     var self = this;
     var proto = this.prototype;
     var makeColor = $jsilxna.makeColor;
@@ -2336,25 +2331,27 @@ $jsilxna.Color = function ($) {
     Static: true,
     Public: true
   }, "op_Multiply", new JSIL.MethodSignature($jsilxna.colorRef(), [$jsilxna.colorRef(), $.Single], []), function (color, multiplier) {
-    var result = Object.create(Object.getPrototypeOf(color));
-    result.a = $jsilxna.ClampByte(color.a * multiplier);
+    var result = $jsilxna.makeColorInstance();
     result.r = $jsilxna.ClampByte(color.r * multiplier);
     result.g = $jsilxna.ClampByte(color.g * multiplier);
     result.b = $jsilxna.ClampByte(color.b * multiplier);
+    result.a = $jsilxna.ClampByte(color.a * multiplier);
     return result;
   });
 
   $.Method({
     Static: true,
     Public: true
-  }, "Lerp", new JSIL.MethodSignature($jsilxna.colorRef(), [$jsilxna.colorRef(), $jsilxna.colorRef(), $.Single], []), function (a, b, amount) {
-    var result = Object.create(Object.getPrototypeOf(a));
-    result.a = $jsilxna.ClampByte(a.a + (b.a - a.a) * amount);
-    result.r = $jsilxna.ClampByte(a.r + (b.r - a.r) * amount);
-    result.g = $jsilxna.ClampByte(a.g + (b.g - a.g) * amount);
-    result.b = $jsilxna.ClampByte(a.b + (b.b - a.b) * amount);
-    return result;
-  });
+  }, "Lerp", new JSIL.MethodSignature($jsilxna.colorRef(), [$jsilxna.colorRef(), $jsilxna.colorRef(), $.Single], []), 
+    function Color_Lerp (a, b, amount) {
+      var result = $jsilxna.makeColorInstance();
+      result.r = $jsilxna.ClampByte(a.r + (b.r - a.r) * amount);
+      result.g = $jsilxna.ClampByte(a.g + (b.g - a.g) * amount);
+      result.b = $jsilxna.ClampByte(a.b + (b.b - a.b) * amount);
+      result.a = $jsilxna.ClampByte(a.a + (b.a - a.a) * amount);
+      return result;
+    }
+  );
 
   $.RawMethod(false, "toCss", function (alpha) {
     if ((typeof(this._cachedCss) === "string") && (this._cachedAlpha === alpha)) {
@@ -2724,33 +2721,11 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Storage.StorageDevice", functio
   );
 
   var callAsyncCallback = function (callback, state, data) {
-    // FIXME: Terrible hack
-    var awh = {
-      WaitOne: function () {
-        return;
-      },
-      Close: function () {
-        return;
-      }
-    };
+    var asyncResult = new JSIL.FakeAsyncResult(state);
+    asyncResult.data = data;
 
-    var asyncResult = {
-      IsCompleted: true,
-      IAsyncResult_IsCompleted: true,
-      get_IsCompleted: function () { return true; },
-      IAsyncResult_get_IsCompleted: function () { return true; },
-      AsyncState: state,
-      IAsyncResult_AsyncState: state,
-      get_AsyncState: function () { return state; },
-      IAsyncResult_get_AsyncState: function () { return state; },
-      data: data,
-      IAsyncResult_AsyncWaitHandle: awh,
-      IAsyncResult_get_AsyncWaitHandle: function () { return awh; }
-    };
-
-    if (typeof (callback) === "function") {
+    if (typeof (callback) === "function")
       callback(asyncResult);
-    }
 
     return asyncResult;
   };
@@ -3027,4 +3002,106 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.GameServiceContainer", function
     }
   );
 
+});
+
+JSIL.MakeClass("System.Object", "JSIL.FakeAsyncResult", true, [], function ($interfaceBuilder) {
+  var $ = $interfaceBuilder;
+
+  $.RawMethod(false, ".ctor", function (state) {
+    this._state = state;
+  });
+
+  $.Method({Static:false, Public:true , Virtual:true }, "get_AsyncState", 
+    new JSIL.MethodSignature($.Object, [], []), 
+    function () {
+      return this._state;
+    }
+  );
+
+  $.Method({Static:false, Public:true , Virtual:true }, "get_AsyncWaitHandle", 
+    new JSIL.MethodSignature($jsilcore.TypeRef("System.Threading.WaitHandle"), [], []), 
+    function () {
+      return new JSIL.FakeWaitHandle();
+    }
+  );
+
+  $.Method({Static:false, Public:true , Virtual:true }, "get_CompletedSynchronously", 
+    new JSIL.MethodSignature($.Boolean, [], []), 
+    function () {
+      return true;
+    }
+  );
+
+  $.Method({Static:false, Public:true , Virtual:true }, "get_IsCompleted", 
+    new JSIL.MethodSignature($.Boolean, [], []), 
+    function () {
+      return true;
+    }
+  );
+
+  $.Property({Static:false, Public:true , Virtual:true }, "IsCompleted", $.Boolean);
+  $.Property({Static:false, Public:true , Virtual:true }, "AsyncWaitHandle", $jsilcore.TypeRef("System.Threading.WaitHandle"));
+  $.Property({Static:false, Public:true , Virtual:true }, "AsyncState", $.Object);
+  $.Property({Static:false, Public:true , Virtual:true }, "CompletedSynchronously", $.Boolean);
+
+  $.ImplementInterfaces(
+    /* 0 */ $jsilcore.TypeRef("System.IAsyncResult")
+  );
+});
+
+JSIL.MakeClass("System.Object", "JSIL.FakeWaitHandle", true, [], function ($interfaceBuilder) {
+  var $ = $interfaceBuilder;
+
+  $.Method({Static:false, Public:true , Virtual:true }, "Close", 
+    new JSIL.MethodSignature(null, [], []), 
+    function Close () {
+    }
+  );
+
+  $.Method({Static:false, Public:true , Virtual:true }, "Dispose", 
+    new JSIL.MethodSignature(null, [], []), 
+    function Dispose () {
+    }
+  );
+
+  $.Method({Static:false, Public:true , Virtual:true }, "WaitOne", 
+    new JSIL.MethodSignature($.Boolean, [$.Int32, $.Boolean], []), 
+    function WaitOne (millisecondsTimeout, exitContext) {
+    }
+  );
+
+  $.Method({Static:false, Public:true , Virtual:true }, "WaitOne", 
+    new JSIL.MethodSignature($.Boolean, [$jsilcore.TypeRef("System.TimeSpan"), $.Boolean], []), 
+    function WaitOne (timeout, exitContext) {
+    }
+  );
+
+  $.Method({Static:false, Public:true , Virtual:true }, "WaitOne", 
+    new JSIL.MethodSignature($.Boolean, [], []), 
+    function WaitOne () {
+    }
+  );
+
+  $.Method({Static:false, Public:true , Virtual:true }, "WaitOne", 
+    new JSIL.MethodSignature($.Boolean, [$.Int32], []), 
+    function WaitOne (millisecondsTimeout) {
+    }
+  );
+
+  $.Method({Static:false, Public:true , Virtual:true }, "WaitOne", 
+    new JSIL.MethodSignature($.Boolean, [$jsilcore.TypeRef("System.TimeSpan")], []), 
+    function WaitOne (timeout) {
+    }
+  );
+
+  $.Method({Static:false, Public:false}, "WaitOne", 
+    new JSIL.MethodSignature($.Boolean, [$.Int64, $.Boolean], []), 
+    function WaitOne (timeout, exitContext) {
+      throw new Error('Not implemented');
+    }
+  );
+
+  $.ImplementInterfaces(
+    /* 0 */ $jsilcore.TypeRef("System.IDisposable")
+  );
 });

@@ -1,6 +1,7 @@
 function initTouchEvents () {
-  JSIL.Host.hasTouchEvents = (typeof (TouchEvent) !== "undefined") && ("createTouch" in document);
+  JSIL.Host.hasTouchEvents = (typeof (TouchEvent) !== "undefined");
   JSIL.Host.isTouchInUse = false;
+  JSIL.Host.currentNativeTouches = [];
 
   if (!JSIL.Host.hasTouchEvents)
     return;
@@ -15,11 +16,27 @@ function initTouchEvents () {
   };
 
   window.addEventListener("touchstart", function (evt) {
+    if (jsilConfig.touch)
+      evt.preventDefault();
+
     setTouchInUse();
+
+    JSIL.Host.currentNativeTouches = evt.touches;
   }, true);
+
   window.addEventListener("touchmove", function (evt) {
+    if (jsilConfig.touch)
+      evt.preventDefault();
+
+    JSIL.Host.currentNativeTouches = evt.touches;
   }, true);
+
   window.addEventListener("touchend", function (evt) {
+    if (jsilConfig.touch)
+      evt.preventDefault();
+    
     setTouchInUse();
+
+    JSIL.Host.currentNativeTouches = evt.touches;
   }, true);
 }

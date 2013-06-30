@@ -258,7 +258,7 @@ JSIL.ImplementExternals("System.IO.File", function ($) {
     }
   );
 
-  $.Method({Static:true , Public:true }, "CreateText", 
+  $.Method({Static:true , Public:true }, "AppendText", 
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.IO.StreamWriter"), [$.String], [])), 
     function AppendText (path) {
       return new System.IO.StreamWriter(path, true);
@@ -440,14 +440,18 @@ JSIL.ImplementExternals("System.IO.Path", function ($) {
 });
 
 JSIL.ImplementExternals("System.IO.Stream", function ($) {
+  var readByteBuffer = null;
+
   $.Method({Static:false, Public:true }, "ReadByte", 
     (new JSIL.MethodSignature($.Int32, [], [])), 
     function ReadByte () {
-      var buffer = [];
-      var count = this.Read(buffer, 0, 1);
+      if (!readByteBuffer)
+        readByteBuffer = JSIL.Array.New(System.Byte, 1);
+
+      var count = this.Read(readByteBuffer, 0, 1);
 
       if (count >= 1)
-        return buffer[0];
+        return readByteBuffer[0];
       else
         return -1;
     }
@@ -485,8 +489,8 @@ var $bytestream = function ($) {
           $.Int32
         ], [])), 
     function Read (buffer, offset, count) {
-      var startPos = this._pos;
-      var endPos = this._pos + count;
+      var startPos = this._pos | 0;
+      var endPos = (this._pos + count) | 0;
 
       if (endPos >= this._length) {
         endPos = this._length - 1;
@@ -496,8 +500,22 @@ var $bytestream = function ($) {
       if ((startPos < 0) || (startPos >= this._length))
         return 0;
 
-      for (var i = 0; i < count; i++) {
-        buffer[i] = this._buffer[startPos + i];
+      offset = (offset | 0);
+      count = (count | 0);
+
+      var sourceBuffer = this._buffer;
+      for (var i = 0; i < count; i = (i + 1) | 0) {
+        var destIndex = (offset + i) | 0;
+        var sourceIndex = (startPos + i) | 0;
+
+        /*
+        if ((destIndex < 0) || (destIndex >= buffer.length))
+          throw new Error("Destination index out of range: " + destIndex);
+        if ((sourceIndex < 0) || (sourceIndex >= sourceBuffer.length))
+          throw new Error("Source index out of range: " + sourceIndex);
+        */
+
+        buffer[destIndex] = sourceBuffer[sourceIndex];
       }
 
       this._pos += count;
@@ -606,22 +624,6 @@ JSIL.ImplementExternals("System.IO.FileStream", function ($) {
 
       this._pos = 0;
       this._length = 0;
-    }
-  );
-  
-  $.Method({Static:false, Public:true }, ".ctor", 
-    (new JSIL.MethodSignature(null, [$.String, $jsilcore.TypeRef("System.IO.FileMode"), $jsilcore.TypeRef("System.IO.FileAccess")], [])), 
-    function _ctor (path, mode, access) {
-      // FIXME: access
-      System.IO.FileStream.prototype._ctor.call(this, path, mode);
-    }
-  );
-  
-  $.Method({Static:false, Public:true }, ".ctor", 
-    (new JSIL.MethodSignature(null, [$.String, $jsilcore.TypeRef("System.IO.FileMode"), $jsilcore.TypeRef("System.IO.FileAccess"), $jsilcore.TypeRef("System.IO.FileShare")], [])), 
-    function _ctor (path, mode, access, share) {
-      // FIXME: access, share
-      System.IO.FileStream.prototype._ctor.call(this, path, mode);
     }
   );
 
@@ -948,9 +950,7 @@ $jsilio.ReadCharFromStream = function ReadCharFromStream (stream, encoding) {
   var minCharLength = encoding.minimumCharLength || 1;
   var maxCharLength = encoding.maximumCharLength || 4;
 
-  var bytes = new Array(maxCharLength);
-  for (var i = 0; i < maxCharLength; i++)
-    bytes[i] = false;
+  var bytes = JSIL.Array.New(System.Byte, maxCharLength);
 
   for (var i = minCharLength; i <= maxCharLength; i++) {
     stream.Position = oldPosition;
@@ -1040,23 +1040,29 @@ JSIL.ImplementExternals("System.IO.BinaryReader", function ($) {
   );
 
   $.RawMethod(false, "$readBytesTemp", function (count) {
-    if (!this.m_tempBuffer)
-      this.m_tempBuffer = new Array();
+    if (!this.m_tempBuffer || (this.m_tempBuffer.length < count))
+      this.m_tempBuffer = JSIL.Array.New(System.Byte, count);
 
     var bytesRead = this.m_stream.Read(this.m_tempBuffer, 0, count);
     if (bytesRead < count)
       throw new System.IO.EndOfStreamException();
 
-    this.m_tempBuffer.length = bytesRead;
     return this.m_tempBuffer;
   });
 
   $.Method({Static:false, Public:true }, "ReadBytes", 
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.Array", [$.Byte]), [$.Int32], [])), 
     function ReadBytes (count) {
-      var result = new Array(count);
+      var result = JSIL.Array.New(System.Byte, count);
       var bytesRead = this.m_stream.Read(result, 0, count);
-      return result.slice(0, bytesRead);
+
+      if (bytesRead < count) {
+        var oldArray = result;
+        result = JSIL.Array.New(System.Byte, bytesRead);
+        JSIL.Array.CopyTo(oldArray, result, 0);
+      }
+
+      return result;
     }
   );
 
@@ -1277,7 +1283,7 @@ JSIL.ImplementExternals("System.IO.StreamReader", function ($) {
 
       if (detectEncoding) {
         var originalPosition = this.stream.get_Position();
-        var buf = new Array(4);
+        var buf = JSIL.Array.New(System.Byte, 4);
         var bytesRead = this.stream.Read(buf, 0, buf.length);
         var bytesToSkip = 0;
 

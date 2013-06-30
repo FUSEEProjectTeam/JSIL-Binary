@@ -63,8 +63,16 @@ function doXHR (uri, asBinary, onComplete) {
 
   needCORS = needCORS && !sameHost;
 
-  if ((location.protocol === "file:") && (typeof (ActiveXObject) !== "undefined")) {
-    req = new ActiveXObject("MSXML2.XMLHTTP");
+  if (location.protocol === "file:") {
+    var errorText = "Loading assets from file:// is not possible in modern web browsers. You must host your application/game on a web server.";
+
+    if (console && console.error) {
+      console.error(errorText + "\nFailed to load: " + uri);
+      onComplete(null, errorText);
+      return;
+    } else {
+      throw new Error(errorText);
+    }
   } else {
     req = new XMLHttpRequest();
 
@@ -153,6 +161,7 @@ function doXHR (uri, asBinary, onComplete) {
 
       if (asBinary) {
         var bytes;
+        var ieResponseBody = null;
 
         try {
           if (
@@ -163,11 +172,11 @@ function doXHR (uri, asBinary, onComplete) {
             var buffer = req.response;
             bytes = new Uint8Array(buffer);
           } else if (
-            (typeof (req.responseBody) !== "undefined") && 
             (typeof (VBArray) !== "undefined") &&
-            (req.responseBody)
+            ("responseBody" in req) && 
+            ((ieResponseBody = new VBArray(req.responseBody).toArray()) != null)
           ) {
-            bytes = new VBArray(req.responseBody).toArray();
+            bytes = ieResponseBody;
           } else if (req.responseText) {
             var text = req.responseText;
             bytes = JSIL.StringToByteArray(text);
@@ -211,10 +220,14 @@ function doXHR (uri, asBinary, onComplete) {
 
     if (typeof (req.overrideMimeType) !== "undefined") {
       req.overrideMimeType('application/octet-stream; charset=x-user-defined');
+    } else {
+      req.setRequestHeader('Accept-Charset', 'x-user-defined');
     }
   } else {
     if (typeof (req.overrideMimeType) !== "undefined") {
       req.overrideMimeType('text/plain; charset=x-user-defined');
+    } else {
+      req.setRequestHeader('Accept-Charset', 'x-user-defined');
     }
   }
 

@@ -604,7 +604,7 @@ JSIL.MakeClass("System.Array", "JSIL.PackedStructArray", true, ["T"], function (
       this.nativeSize = this.T.__NativeSize__;
       this.elementReferenceConstructor = JSIL.$GetStructElementReferenceConstructor(this.T);
       this.unmarshalConstructor = JSIL.$GetStructUnmarshalConstructor(this.T);
-      // this.unmarshaller = JSIL.$GetStructUnmarshaller(structType);
+      this.unmarshaller = JSIL.$GetStructUnmarshaller(this.T);
       this.marshaller = JSIL.$GetStructMarshaller(this.T);
       this.length = (buffer.byteLength / this.nativeSize) | 0;
     }
@@ -629,6 +629,15 @@ JSIL.MakeClass("System.Array", "JSIL.PackedStructArray", true, ["T"], function (
   );
 
   $.Method(
+    {}, "GetItemInto", 
+    new JSIL.MethodSignature(null, [$.Int32, TRef], []),
+    function PackedStructArray_GetItemInto (index, output) {
+      var offsetInBytes = (index * this.nativeSize) | 0;
+      this.unmarshaller(output.get(), this.bytes, offsetInBytes);
+    }
+  );
+
+  $.Method(
     {}, "set_Item", 
     new JSIL.MethodSignature(null, [$.Int32, T], []),
     function PackedStructArray_set_Item (index, value) {
@@ -649,7 +658,7 @@ JSIL.MakeClass("System.Array", "JSIL.PackedStructArray", true, ["T"], function (
   $.Property({}, "Length");
 
   $.ImplementInterfaces(
-    $jsilcore.TypeRef("JSIL.Runtime.IPackedArray`1", [T])
+    /* 0 */ $jsilcore.TypeRef("JSIL.Runtime.IPackedArray`1", [T])
   );
 });
 
@@ -998,8 +1007,13 @@ JSIL.$MakeStructMarshalFunctionSource = function (typeObject, marshal, isConstru
   body.push("if (!isAligned) throw new Error('Unaligned marshal');");
   */
 
-  for (var i = 0, l = fields.length; i < l; i++) {
-    var field = fields[i];
+  var sortedFields = Array.prototype.slice.call(fields);
+  sortedFields.sort(function (lhs, rhs) {
+    return lhs.offsetBytes - rhs.offsetBytes;
+  });
+
+  for (var i = 0, l = sortedFields.length; i < l; i++) {
+    var field = sortedFields[i];
     var offset = field.offsetBytes;
     var size = field.sizeBytes;
 
@@ -1064,8 +1078,13 @@ JSIL.$MakeStructMarshalFunctionSource = function (typeObject, marshal, isConstru
       closure[byteViewKey] = clampedByteView;
 
       if (marshal) {
-        body.push(nativeViewKey + "[0] = " + structArgName + "." + field.name + ";");
-        body.push("bytes.set(" + byteViewKey + ", (offset + " + offset + ") | 0);");
+        if (nativeView.BYTES_PER_ELEMENT === 1) {
+          // HACK: Fast path for single byte fields.
+          body.push("bytes[(offset + " + offset + ") | 0] = " + structArgName + "." + field.name + ";");
+        } else {
+          body.push(nativeViewKey + "[0] = " + structArgName + "." + field.name + ";");
+          body.push("bytes.set(" + byteViewKey + ", (offset + " + offset + ") | 0);");
+        }
       } else {
         // Really, really awful
         var setLocalOffset = "localOffset = (offset + " + offset + ") | 0;";
@@ -1075,8 +1094,13 @@ JSIL.$MakeStructMarshalFunctionSource = function (typeObject, marshal, isConstru
         }
 
         body.push(setLocalOffset);
-        JSIL.$EmitMemcpyIntrinsic(body, byteViewKey, "bytes", "localOffset", size, viewBytes);
-        body.push(structArgName + "." + field.name + " = " + nativeViewKey + "[0];");
+        if (nativeView.BYTES_PER_ELEMENT === 1) {
+          // HACK: Fast path for single byte fields.
+          body.push(structArgName + "." + field.name + " = " + "bytes[localOffset];");
+        } else {
+          JSIL.$EmitMemcpyIntrinsic(body, byteViewKey, "bytes", "localOffset", size, viewBytes);
+          body.push(structArgName + "." + field.name + " = " + nativeViewKey + "[0];");
+        }
       }
     }
   }

@@ -105,6 +105,13 @@ JSIL.ImplementExternals(
       }
     );
 
+    $.Method({Static:true , Public:true }, "op_GreaterThanOrEqual", 
+      (new JSIL.MethodSignature($.Boolean, [$.Type, $.Type], [])), 
+      function op_GreaterThanOrEqual (t1, t2) {
+        return $jsilcore.System.Int64.op_GreaterThanOrEqual(t1._ticks, t2._ticks);
+      }
+    );
+
     $.Method({Static:true , Public:true }, "op_Inequality", 
       (new JSIL.MethodSignature($.Boolean, [$.Type, $.Type], [])), 
       function op_Inequality (t1, t2) {
@@ -116,6 +123,13 @@ JSIL.ImplementExternals(
       (new JSIL.MethodSignature($.Boolean, [$.Type, $.Type], [])), 
       function op_LessThan (t1, t2) {
         return $jsilcore.System.Int64.op_LessThan(t1._ticks, t2._ticks);
+      }
+    );
+
+    $.Method({Static:true , Public:true }, "op_LessThanOrEqual", 
+      (new JSIL.MethodSignature($.Boolean, [$.Type, $.Type], [])), 
+      function op_LessThanOrEqual (t1, t2) {
+        return $jsilcore.System.Int64.op_LessThanOrEqual(t1._ticks, t2._ticks);
       }
     );
 
@@ -1151,118 +1165,6 @@ JSIL.ImplementExternals("System.DateTime", function ($) {
   $.Method({Static:false, Public:true }, "Subtract", 
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.DateTime"), [$jsilcore.TypeRef("System.TimeSpan")], [])), 
     function Subtract (value) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToBoolean", 
-    (new JSIL.MethodSignature($.Boolean, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToBoolean (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToByte", 
-    (new JSIL.MethodSignature($.Byte, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToByte (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToChar", 
-    (new JSIL.MethodSignature($.Char, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToChar (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToDateTime", 
-    (new JSIL.MethodSignature($jsilcore.TypeRef("System.DateTime"), [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToDateTime (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToDecimal", 
-    (new JSIL.MethodSignature($jsilcore.TypeRef("System.Decimal"), [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToDecimal (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToDouble", 
-    (new JSIL.MethodSignature($.Double, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToDouble (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToInt16", 
-    (new JSIL.MethodSignature($.Int16, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToInt16 (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToInt32", 
-    (new JSIL.MethodSignature($.Int32, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToInt32 (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToInt64", 
-    (new JSIL.MethodSignature($.Int64, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToInt64 (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToSByte", 
-    (new JSIL.MethodSignature($.SByte, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToSByte (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToSingle", 
-    (new JSIL.MethodSignature($.Single, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToSingle (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToType", 
-    (new JSIL.MethodSignature($.Object, [$jsilcore.TypeRef("System.Type"), $jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToType (type, provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToUInt16", 
-    (new JSIL.MethodSignature($.UInt16, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToUInt16 (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToUInt32", 
-    (new JSIL.MethodSignature($.UInt32, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToUInt32 (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "IConvertible.ToUInt64", 
-    (new JSIL.MethodSignature($.UInt64, [$jsilcore.TypeRef("System.IFormatProvider")], [])), 
-    function IConvertible_ToUInt64 (provider) {
-      throw new Error('Not implemented');
-    }
-  );
-
-  $.Method({Static:false, Public:false}, "ISerializable.GetObjectData", 
-    (new JSIL.MethodSignature(null, [$jsilcore.TypeRef("System.Runtime.Serialization.SerializationInfo"), $jsilcore.TypeRef("System.Runtime.Serialization.StreamingContext")], [])), 
-    function ISerializable_GetObjectData (info, context) {
       throw new Error('Not implemented');
     }
   );
