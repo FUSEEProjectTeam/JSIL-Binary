@@ -7,6 +7,9 @@ if (!$jsilcore)
   throw new Error("JSIL.Core is required");
 
 JSIL.MakeClass("System.ValueType", "System.Enum", true, [], function ($) {
+  $.ImplementInterfaces(
+    /* 0 */ $jsilcore.TypeRef("System.IConvertible")
+  );
 });
 
 JSIL.ImplementExternals("System.Object", function ($) {
@@ -41,7 +44,7 @@ JSIL.ImplementExternals("System.Object", function ($) {
         var value = initializer[key];
 
         if (isInitializer(value)) {
-          value.Apply(this[key]);
+          this[key] = value.Apply(this[key]);
         } else {
           this[key] = value;
         }
@@ -63,6 +66,13 @@ JSIL.ImplementExternals("System.Object", function ($) {
     new JSIL.MethodSignature("System.Boolean", ["System.Object"], [], $jsilcore),
     function Object_Equals (rhs) {
       return this === rhs;
+    }
+  );
+
+  $.Method({Static:false, Public:true }, "GetHashCode", 
+    (new JSIL.MethodSignature($.Int32, [], [])), 
+    function Object_GetHashCode () {
+      return JSIL.HashCodeInternal(this);
     }
   );
 
@@ -144,25 +154,33 @@ JSIL.MakeClass("System.Object", "JSIL.CollectionInitializer", true, [], function
   );
 
   $.RawMethod(false, "Apply",
-    function (target) {
-      JSIL.ApplyCollectionInitializer(target, this.values);
+    function (previousValue) {
+      JSIL.ApplyCollectionInitializer(previousValue, this.values);
+
+      return previousValue;
     }
   );
 });
 
 JSIL.MakeClass("System.Object", "JSIL.ObjectInitializer", true, [], function ($) {
   $.RawMethod(false, ".ctor",
-    function (initializer) {
+    function (newInstance, initializer) {
+      this.hasInstance = (newInstance !== null);
+      this.instance = newInstance;
       this.initializer = initializer;
     }
   );
 
   $.RawMethod(false, "Apply",
-    function (target) {
-      if (target)
-        target.__Initialize__(this.initializer);
+    function (previousValue) {
+      var result = this.hasInstance ? this.instance : previousValue;
+
+      if (result)
+        result.__Initialize__(this.initializer);
       else
         JSIL.Host.warning("Object initializer applied to null/undefined!");
+
+      return result;
     }
   );
 });
@@ -313,11 +331,11 @@ JSIL.MakeClass("System.Object", "System.Array", true, [], function ($) {
     if (typeof (compositePublicInterface) === "undefined") {
       var typeName = elementTypeObject.__FullName__ + "[]";
 
-      var compositeTypeObject = JSIL.CloneObject(typeObject);
+      var compositeTypeObject = JSIL.CreateDictionaryObject(typeObject);
       compositePublicInterface = function (size) {
         throw new Error("Invalid use of Array constructor. Use JSIL.Array.New.");
       };
-      compositePublicInterface.prototype = JSIL.CloneObject(publicInterface.prototype);
+      compositePublicInterface.prototype = JSIL.CreatePrototypeObject(publicInterface.prototype);
 
       compositePublicInterface.__Type__ = compositeTypeObject;
       JSIL.SetTypeId(
@@ -504,6 +522,31 @@ JSIL.ImplementExternals("System.Enum", function ($) {
     (new JSIL.MethodSignature($.Object, ["System.Type", $.Int32], [])),
     function ToObject (enumType, value) {
       return enumType[enumType.__ValueToName__[value]];
+    }
+  );
+
+  $.Method({Static:false, Public:false, Virtual:true }, "ToInt32",
+    new JSIL.MethodSignature($.Int32, [$jsilcore.TypeRef("System.IFormatProvider")], []),
+    function (provider) {
+      return $jsilcore.System.Convert.ToInt32(this.value, provider);
+    }
+  );
+
+  $.Method({Static:false, Public:false, Virtual:true }, "ToInt64",
+    new JSIL.MethodSignature($.Int64, [$jsilcore.TypeRef("System.IFormatProvider")], []),
+    function (provider) {
+      return $jsilcore.System.Convert.ToInt64(this.value, provider);
+    }
+  );
+
+  $.Method({Static: false, Public: true}, "Object.Equals",
+    new JSIL.MethodSignature(System.Boolean, [System.Object]),
+    function (rhs) {
+      if (rhs === null)
+        return false;
+      
+      return (this.__ThisType__ === rhs.__ThisType__) &&
+        (this.value === rhs.value);
     }
   );
 });

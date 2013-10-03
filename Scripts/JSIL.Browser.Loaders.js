@@ -63,7 +63,7 @@ function doXHR (uri, asBinary, onComplete) {
 
   needCORS = needCORS && !sameHost;
 
-  if (location.protocol === "file:") {
+  /*if (location.protocol === "file:") {
     var errorText = "Loading assets from file:// is not possible in modern web browsers. You must host your application/game on a web server.";
 
     if (console && console.error) {
@@ -73,7 +73,7 @@ function doXHR (uri, asBinary, onComplete) {
     } else {
       throw new Error(errorText);
     }
-  } else {
+  } else {*/
     req = new XMLHttpRequest();
 
     if (needCORS && !("withCredentials" in req)) {
@@ -89,7 +89,7 @@ function doXHR (uri, asBinary, onComplete) {
         onComplete(null, "CORS unavailable");
         return;
       }
-    }
+    //}
   }
 
   var isDone = false;
@@ -412,6 +412,21 @@ var assetLoaders = {
           allAssets[getAssetName(filename)] = JSON.parse(result);
         };
         onDoneLoading(finisher);
+      } else {
+        onError(error);
+      }
+    });
+  },
+  "ManifestResource": function loadManifestResourceStream (filename, data, onError, onDoneLoading) {
+    loadBinaryFileAsync(jsilConfig.scriptRoot + filename, function (result, error) {
+      if ((result !== null) && (!error)) {
+        var dict = allManifestResources[data.assembly];
+        if (!dict)
+          dict = allManifestResources[data.assembly] = Object.create(null);
+
+        dict[filename.toLowerCase()] = result;
+        
+        onDoneLoading(null); 
       } else {
         onError(error);
       }

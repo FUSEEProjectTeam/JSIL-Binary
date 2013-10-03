@@ -44,8 +44,8 @@ JSIL.MakeClass("System.Object", "JSIL.Reference", true, [], function ($) {
     if (typeof (compositePublicInterface) === "undefined") {
       var typeName = "ref " + elementName;
 
-      var compositeTypeObject = JSIL.CloneObject($.Type);
-      compositePublicInterface = JSIL.CloneObject(JSIL.Reference);
+      var compositeTypeObject = JSIL.CreateDictionaryObject($.Type);
+      compositePublicInterface = JSIL.CreateDictionaryObject(JSIL.Reference);
 
       compositePublicInterface.__Type__ = compositeTypeObject;
       compositeTypeObject.__PublicInterface__ = compositePublicInterface;
@@ -140,7 +140,7 @@ JSIL.MakeClass("JSIL.Reference", "JSIL.ArrayElementReference", true, [], functio
   $.RawMethod(false, ".ctor",
     function ArrayElementReference_ctor (array, index) {
       this.array = array;
-      this.index = index;
+      this.index = index | 0;
     }
   );
 
@@ -153,6 +153,14 @@ JSIL.MakeClass("JSIL.Reference", "JSIL.ArrayElementReference", true, [], functio
   $.RawMethod(false, "set",
     function ArrayElementReference_Set (value) {
       return this.array[this.index] = value;
+    }
+  );
+
+  $.RawMethod(false, "retarget",
+    function ArrayElementReference_Retarget (array, index) {
+      this.array = array;
+      this.index = index | 0;
+      return this;
     }
   );
 });

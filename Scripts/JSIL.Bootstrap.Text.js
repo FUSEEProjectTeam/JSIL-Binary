@@ -235,10 +235,13 @@ JSIL.ParseCustomNumberFormat = function (customFormat) {
   return formatter;
 };
 
-JSIL.NumberToFormattedString = function (value, valueFormat, formatProvider) {
+JSIL.NumberToFormattedString = function (value, alignment, valueFormat, formatProvider) {
   // FIXME: formatProvider
 
-  if (!valueFormat)
+  if (
+    (arguments.length === 1) || 
+    ((typeof (alignment) === "undefined") && (typeof (valueFormat) === "undefined")) 
+  )
     return value.toString();
 
   var formatInteger = function (value, radix, digits) {
@@ -282,37 +285,70 @@ JSIL.NumberToFormattedString = function (value, valueFormat, formatProvider) {
     return pieces.join(".");
   };
 
-  var parsedCustomFormat = JSIL.ParseCustomNumberFormat(valueFormat);
+  var parsedCustomFormat = null;
+  var result;
+
+  if (valueFormat)
+    parsedCustomFormat = JSIL.ParseCustomNumberFormat(valueFormat);
 
   if (parsedCustomFormat) {
-    return parsedCustomFormat(value);
+    result = parsedCustomFormat(value);
 
-  } else {
+  } else if (valueFormat) {
     switch (valueFormat[0]) {
       case 'd':
       case 'D':
-        return formatInteger(value, 10, valueFormat.substr(1));
+        result = formatInteger(value, 10, valueFormat.substr(1));
+        break;
 
       case 'x':
-        return formatInteger(value, 16, valueFormat.substr(1)).toLowerCase();
+        result = formatInteger(value, 16, valueFormat.substr(1)).toLowerCase();
+        break;
 
       case 'X':
-        return formatInteger(value, 16, valueFormat.substr(1)).toUpperCase();
+        result = formatInteger(value, 16, valueFormat.substr(1)).toUpperCase();
+        break;
 
       case 'f':
       case 'F':
-        return formatFloat(value, valueFormat.substr(1));
+        result = formatFloat(value, valueFormat.substr(1));
+        break;
 
       case 'n':
       case 'N':
-        var result = formatFloat(value, valueFormat.substr(1));
-        return insertPlaceSeparators(result);
+        result = formatFloat(value, valueFormat.substr(1));
+        result = insertPlaceSeparators(result);
+        break;
 
       default:
         throw new Error("Unsupported format string: " + valueFormat);
 
     }
+
+  } else {
+    result = String(value);
   }
+
+  if (typeof (alignment) === "string")
+    alignment = parseInt(alignment);
+
+  if (typeof (alignment) === "number") {
+    var absAlignment = Math.abs(alignment);
+    if (result.length >= absAlignment)
+      return result;
+
+    var paddingSize = absAlignment - result.length;
+    var padding = "";
+    for (var i = 0; i < paddingSize; i++)
+      padding += " ";
+
+    if (alignment > 0)
+      return padding + result;
+    else
+      return result + padding;
+  }
+
+  return result;
 };
 
 JSIL.StringFromByteArray = function (bytes, startIndex, length) {
@@ -452,12 +488,16 @@ JSIL.ImplementExternals(
       }
     );
 
-    var formatRegex = new RegExp("{([0-9]*)(?::([^}]*))?}|{{|}}", "g");
+    //                             index   alignment      valueFormat    escape
+    var formatRegex = new RegExp("{([0-9]*)(?:,([-0-9]*))?(?::([^}]*))?}|{{|}}|{|}", "g");
 
     $.Method({Static:true , Public:true }, "Format", 
       new JSIL.MethodSignature($jsilcore.TypeRef("System.String"), [$jsilcore.TypeRef("System.Array") /* AnyType[] */ ], []),
       function (format) {
         format = String(format);
+
+        if (arguments.length === 1)
+          return format;
 
         var match = null;
         var values = Array.prototype.slice.call(arguments, 1);
@@ -465,18 +505,20 @@ JSIL.ImplementExternals(
         if ((values.length == 1) && JSIL.IsArray(values[0]))
           values = values[0];
 
-        var matcher = function (match, index, valueFormat, offset, str) {
+        var matcher = function (match, index, alignment, valueFormat, offset, str) {
           if (match === "{{")
             return "{";
           else if (match === "}}")
             return "}";
+          else if ((match === "{") || (match === "}"))
+            throw new System.FormatException("Input string was not in a correct format.");
 
           index = parseInt(index);
 
           var value = values[index];
 
-          if (valueFormat) {
-            return JSIL.NumberToFormattedString(value, valueFormat);
+          if (alignment || valueFormat) {
+            return JSIL.NumberToFormattedString(value, alignment, valueFormat);
 
           } else {
 
@@ -485,6 +527,8 @@ JSIL.ImplementExternals(
                 return "True";
               else
                 return "False";
+            } else if (value === null) {
+              return "";
             } else {
               return String(value);
             }
@@ -624,8 +668,6 @@ JSIL.ImplementExternals(
 );
 
 JSIL.MakeClass("System.Object", "System.String", true, [], function ($) {
-  $.__IsNativeType__ = true;
-
   $.Field({Static: true , Public: true }, "Empty", $.String, "");
 });
 
@@ -644,7 +686,10 @@ JSIL.EscapeJSRegex = function (regexText) {
   return regexText.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
 };
 
-JSIL.SplitString = function (str, separators) {
+JSIL.SplitString = function (str, separators, options) {
+  if (options && options.value)
+    throw new Error("StringSplitOptions other than None are not implemented");
+
   if (!separators) {
     // Whitespace characters from Unicode 6.0
     separators = [
@@ -675,12 +720,21 @@ JSIL.JoinStrings = function (separator, strings) {
   return strings.join(separator);
 };
 
+JSIL.JoinEnumerable = function (separator, values) {
+  return JSIL.JoinStrings(separator, JSIL.EnumerableToArray(values));
+};
+
 JSIL.ConcatString = function (/* ...values */) {
-  var result = String(arguments[0]);
+  var result = "";
+
+  if (arguments[0] !== null)
+    result = String(arguments[0]);
 
   for (var i = 1, l = arguments.length; i < l; i++) {
     var arg = arguments[i];
-    if (typeof (arg) === "string")
+    if (arg === null)
+      ;
+    else if (typeof (arg) === "string")
       result += arg;
     else
       result += String(arg);
@@ -1833,6 +1887,13 @@ JSIL.ImplementExternals("System.Text.RegularExpressions.Regex", function ($) {
     }
   );
 
+  $.Method({Static:false , Public:true }, "Replace", 
+    (new JSIL.MethodSignature($.String, [$.String, $.String], [])), 
+    function Replace (input, replacement) {
+      return input.replace(this._regex, replacement);
+    }
+  );
+
   $.Method({Static:false, Public:true }, "IsMatch", 
     (new JSIL.MethodSignature($.Boolean, [$.String], [])), 
     function IsMatch (input) {
@@ -2004,16 +2065,42 @@ JSIL.ImplementExternals("System.Char", function ($) {
     }
   );
 
+  $.Method({Static:true , Public:true }, "IsLetter", 
+    new JSIL.MethodSignature($.Boolean, [$.Char], []), 
+    function IsLetter (c) {
+      // FIXME: Unicode
+      var charCode = c.charCodeAt(0);
+      return (
+        ((charCode >= 65) && (charCode <= 90)) ||
+        ((charCode >= 97) && (charCode <= 122)));
+    }
+  );
+
+  $.Method({Static:true , Public:true }, "IsLetterOrDigit", 
+    new JSIL.MethodSignature($.Boolean, [$.Char], []), 
+    function IsLetterOrDigit (c) {
+      return $jsilcore.System.Char.IsLetter(c) || $jsilcore.System.Char.IsDigit(c);
+    }
+  );
+
+  $.Method({Static:true , Public:true }, "IsSurrogate", 
+    new JSIL.MethodSignature($.Boolean, [$.Char], []), 
+    function IsSurrogate (c) {
+      var charCode = c.charCodeAt(0);
+      return (charCode >= 0xD800) && (charCode <= 0xDFFF);
+    }
+  );
+
   $.Method({Static:true , Public:true }, "IsWhiteSpace", 
     new JSIL.MethodSignature($.Boolean, [$.Char], []), 
     function IsWhiteSpace (c) {
       // FIXME: Unicode
       var charCode = c.charCodeAt(0);
-      return 
+      return (
         ((charCode >= 0x09) && (charCode <= 0x13)) || 
         (charCode === 0x20) ||
         (charCode === 0xA0) || 
-        (charCode === 0x85);
+        (charCode === 0x85));
     }
   );
 });

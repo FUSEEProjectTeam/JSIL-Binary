@@ -10,14 +10,14 @@
       "FSharp.Core"
     ],
     "Ignored": [
-      "Microsoft.VisualC,",
+      "Microsoft\\.VisualC,",
       "Accessibility,",
       "SMDiagnostics,",
-      "System.EnterpriseServices,",
-      "System.Security,",
-      "System.Runtime.Serialization.Formatters.Soap,",
-      "System.Runtime.DurableInstancing,",
-      "System.Data.SqlXml,",
+      "System\\.EnterpriseServices,",
+      "System\\.Security,",
+      "System\\.Runtime\\.Serialization\\.Formatters\\.Soap,",
+      "System\\.Runtime\\.DurableInstancing,",
+      "System\\.Data\\.SqlXml,",
       "JSIL.Meta,",
       "Mono.Posix.*",
       "protobuf-net.*"

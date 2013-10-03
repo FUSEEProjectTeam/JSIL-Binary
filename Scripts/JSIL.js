@@ -212,7 +212,17 @@ var $jsilloaderstate = {
   for (var i = 0, l = manifests.length; i < l; i++)
     environment.loadScript(manifestRoot + manifests[i] + ".manifest.js");
 
-  contentManifest["JSIL"].push(["Library", "JSIL.XNA.Core.js"]);
+  contentManifest["JSIL"].push(["Library", "XNA4.js"]);
+
+ if (config.winForms || config.monogame) {
+    contentManifest["JSIL"].push(["Library", "System.Drawing.js"]);
+    contentManifest["JSIL"].push(["Library", "System.Windows.js"]);
+  }
+
+  if (config.monogame) {
+    contentManifest["JSIL"].push(["Library", "MonoGame/OpenTK.js"]);
+    contentManifest["JSIL"].push(["Library", "MonoGame/OpenTK.GL.js"]);
+  }
 
   if (config.readOnlyStorage)
     contentManifest["JSIL"].push(["Library", "JSIL.ReadOnlyStorage.js"]);

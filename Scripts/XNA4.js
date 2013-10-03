@@ -591,7 +591,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Vector2", function ($) {
   $.Method({Static:true , Public:true }, "Transform", 
     (new JSIL.MethodSignature($xnaasms[0].TypeRef("Microsoft.Xna.Framework.Vector2"), [$xnaasms[0].TypeRef("Microsoft.Xna.Framework.Vector2"), $xnaasms[0].TypeRef("Microsoft.Xna.Framework.Matrix")], [])), 
     function Transform (position, matrix) {
-      var result = Object.create(Microsoft.Xna.Framework.Vector2.prototype);
+      var result = JSIL.CreateInstanceObject(Microsoft.Xna.Framework.Vector2.prototype);
       result.X = (position.X * matrix.xScale) + matrix.xTranslation;
       result.Y = (position.Y * matrix.yScale) + matrix.yTranslation;
       return result;
@@ -667,7 +667,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Vector3", function ($) {
   $.Method({Static:true , Public:true }, "Transform", 
     (new JSIL.MethodSignature($xnaasms[0].TypeRef("Microsoft.Xna.Framework.Vector3"), [$xnaasms[0].TypeRef("Microsoft.Xna.Framework.Vector3"), $xnaasms[0].TypeRef("Microsoft.Xna.Framework.Matrix")], [])), 
     function Transform (position, matrix) {
-      var result = Object.create(Microsoft.Xna.Framework.Vector3.prototype);
+      var result = JSIL.CreateInstanceObject(Microsoft.Xna.Framework.Vector3.prototype);
       result.X = (position.X * matrix.xScale) + matrix.xTranslation;
       result.Y = (position.Y * matrix.yScale) + matrix.yTranslation;
       result.Z = (position.Z * matrix.zScale) + matrix.zTranslation;
@@ -725,7 +725,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Vector4", function ($) {
   $.Method({Static:true , Public:true }, "Transform", 
     (new JSIL.MethodSignature($xnaasms[0].TypeRef("Microsoft.Xna.Framework.Vector4"), [$xnaasms[0].TypeRef("Microsoft.Xna.Framework.Vector4"), $xnaasms[0].TypeRef("Microsoft.Xna.Framework.Matrix")], [])), 
     function Transform (position, matrix) {
-      var result = Object.create(Microsoft.Xna.Framework.Vector4.prototype);
+      var result = JSIL.CreateInstanceObject(Microsoft.Xna.Framework.Vector4.prototype);
       result.X = (position.X * matrix.xScale) + matrix.xTranslation;
       result.Y = (position.Y * matrix.yScale) + matrix.yTranslation;
       result.Z = (position.Z * matrix.zScale) + matrix.zTranslation;
@@ -1051,13 +1051,6 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Matrix", function ($) {
       return result;
     }
   );
-});
-
-JSIL.ImplementExternals("Microsoft.Xna.Framework.GameServiceContainer", function ($) {
-  $.Method({
-    Static: false,
-    Public: true
-  }, ".ctor", new JSIL.MethodSignature(null, [], []), function () {});
 });
 
 JSIL.ImplementExternals("Microsoft.Xna.Framework.GameComponentCollection", function ($) {
@@ -2027,7 +2020,7 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.Point", function ($) {
 });
 
 $jsilxna.makeColor = function (proto, r, g, b, a) {
-  var result = Object.create(proto);
+  var result = JSIL.CreateInstanceObject(proto);
   result.r = r;
   result.g = g;
   result.b = b;
@@ -2501,6 +2494,22 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.MathHelper", function ($) {
       return degrees * (Math.PI / 180);
     }
   );
+
+  $.Method({Static:true , Public:true }, "WrapAngle", 
+    (new JSIL.MethodSignature($.Single, [$.Single], [])), 
+    function WrapAngle (angle) {
+      var pi2 = Math.PI * 2;
+      
+      angle = System.Math.IEEERemainder(angle, pi2);
+
+      if (angle <= -Math.PI)
+        angle += pi2;
+      else if (angle > Math.PI)
+        angle -= pi2;
+
+      return angle;
+    }
+  );
 });
 
 JSIL.ImplementExternals("Microsoft.Xna.Framework.TitleContainer", function ($) {
@@ -2968,7 +2977,6 @@ JSIL.ImplementExternals("Microsoft.Xna.Framework.GamerServices.Guide", function 
 });
 
 JSIL.ImplementExternals("Microsoft.Xna.Framework.GameServiceContainer", function ($) {
-
   $.Method({Static:false, Public:true }, ".ctor", 
     (new JSIL.MethodSignature(null, [], [])), 
     function _ctor () {
@@ -3105,3 +3113,7 @@ JSIL.MakeClass("System.Object", "JSIL.FakeWaitHandle", true, [], function ($inte
     /* 0 */ $jsilcore.TypeRef("System.IDisposable")
   );
 });
+
+JSIL.ImplementExternals(
+  "Microsoft.Xna.Framework.Color", $jsilxna.Color
+);

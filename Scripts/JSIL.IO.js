@@ -477,6 +477,17 @@ JSIL.ImplementExternals("System.IO.Stream", function ($) {
     }
   );
 
+  $.Method({Static:false, Public:true }, "CopyTo", 
+    (new JSIL.MethodSignature(null, [$.Type], [])), 
+    function CopyTo (stream) {
+      if (this._buffer) {
+        stream.Write(this._buffer, 0, this._length);
+      } else {
+        throw new Error("Copying not implemented for this stream type");
+      }
+    }
+  );
+
   $.RawMethod(false, "$GetURI", function () {
     return null;
   });
@@ -562,6 +573,13 @@ var $bytestream = function ($) {
     }
   );
   
+  $.Method({Static:false, Public:true }, "get_CanRead", 
+    (new JSIL.MethodSignature($.Boolean, [], [])), 
+    function get_CanRead () {
+      return true;
+    }
+  );
+  
   $.Method({Static:false, Public:true }, "Seek", 
     (new JSIL.MethodSignature($.Int64, [$.Int64, $jsilcore.TypeRef("System.IO.SeekOrigin")], [])), 
     function Seek (offset, origin) {
@@ -624,6 +642,8 @@ JSIL.ImplementExternals("System.IO.FileStream", function ($) {
 
       this._pos = 0;
       this._length = 0;
+      this._canRead = false;
+      this._canWrite = false;
     }
   );
 
@@ -691,6 +711,13 @@ JSIL.ImplementExternals("System.IO.FileStream", function ($) {
 
     return uri;
   });
+  
+  $.Method({Static:false, Public:true }, "get_Name", 
+    (new JSIL.MethodSignature($.String, [], [])), 
+    function get_Name () {
+      return this._fileName;
+    }
+  );
 });
 
 JSIL.ImplementExternals(
@@ -732,6 +759,13 @@ JSIL.ImplementExternals("System.IO.MemoryStream", function ($) {
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.Array", [$.Byte]), [], [])), 
     function GetBuffer () {
       return this._buffer;
+    }
+  );
+
+  $.Method({Static:false, Public:true }, "ToArray", 
+    (new JSIL.MethodSignature($jsilcore.TypeRef("System.Array", [$.Byte]), [], [])), 
+    function ToArray () {
+      return JSIL.Array.Clone(this._buffer);
     }
   );
 });
@@ -976,8 +1010,6 @@ JSIL.ImplementExternals("System.IO.BinaryReader", function ($) {
   $.Method({Static:false, Public:true }, ".ctor", 
     (new JSIL.MethodSignature(null, [$jsilcore.TypeRef("System.IO.Stream")], [])), 
     function _ctor (input) {
-      System.Object.prototype._ctor.call(this);
-
       if (typeof (input) !== "object")
         throw new Error("Invalid stream");
 
@@ -989,8 +1021,6 @@ JSIL.ImplementExternals("System.IO.BinaryReader", function ($) {
   $.Method({Static:false, Public:true }, ".ctor", 
     (new JSIL.MethodSignature(null, [$jsilcore.TypeRef("System.IO.Stream"), $jsilcore.TypeRef("System.Text.Encoding")], [])), 
     function _ctor (input, encoding) {
-      System.Object.prototype._ctor.call(this);
-
       if (typeof (input) !== "object")
         throw new Error("Invalid stream");
 
