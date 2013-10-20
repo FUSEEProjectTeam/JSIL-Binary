@@ -851,7 +851,7 @@ function finishLoading () {
 
 function pollAssetQueue () {      
   var state = this;
-
+  
   var w = 0;
   updateProgressBar("Downloading: ", "kb", state.bytesLoaded / 1024, state.assetBytes / 1024);
 
@@ -874,7 +874,8 @@ function pollAssetQueue () {
       state.assetsLoading -= 1;
       state.assetsLoaded += 1;
 
-      state.bytesLoaded += sizeBytes;
+	  // due to reduced filesize
+      state.bytesLoaded += sizeBytes * (state.assetBytes / state.assetBytesOrg);
     };
   };
 
@@ -976,6 +977,7 @@ function pollAssetQueue () {
 function loadAssets (assets, onDoneLoading) {
   var state = {
     assetBytes: 0,
+	assetBytesOrg: 0,
     assetCount: assets.length,
     bytesLoaded: 0,
     assetsLoaded: 0,
@@ -998,14 +1000,15 @@ function loadAssets (assets, onDoneLoading) {
     var properties = assets[i][2];
 
     if (typeof (properties) !== "object") {
-      state.assetBytes += 1;
+      state.assetsBytesOrg += 1;
       continue;
     }
 
     var sizeBytes = properties.sizeBytes || 1;
-    state.assetBytes += sizeBytes;
+    state.assetBytesOrg += sizeBytes;
   }
 
+  state.assetBytes = state.assetBytesOrg - 19195904; // due to reduced filesize
   state.interval = window.setInterval(pollAssetQueue.bind(state), 1);
 };
 

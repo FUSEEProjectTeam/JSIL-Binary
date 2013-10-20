@@ -519,9 +519,9 @@ function loadHTML5Sound (audioInfo, filename, data, onError, onDoneLoading) {
   onDoneLoading(finisher);
 }
 
-function loadJSSoundComplete(evt, src, onDoneLoading, finisher) {
-  if (evt.src == src) {
-    onDoneLoading(finisher);
+function loadJSSoundComplete(evt, data) {
+  if (evt.src == data.a) {
+    data.b(data.c);
   }
 }
 
@@ -545,7 +545,7 @@ function loadSoundJSSound (audioInfo, filename, data, onError, onDoneLoading) {
   $jsilbrowserstate.allAssetNames.push(filename);
   allAssets[filename] = uri;
 
-  createjs.Sound.addEventListener("loadComplete", createjs.proxy(loadJSSoundComplete, this, uri, onDoneLoading, finisher));
+  createjs.Sound.on("fileload", loadJSSoundComplete, this, false, {a:uri, b:onDoneLoading, c:finisher});
   createjs.Sound.registerSound(uri);
 }
 
