@@ -492,7 +492,8 @@ JSIL.GetAssembly = function (assemblyName, requireExisting) {
 
   JSIL.SetValueProperty(result, "TypeRef", 
     function (name, ga) {
-      return new JSIL.TypeRef(result, name, ga);
+	  var x = new JSIL.TypeRef(result, name, ga)
+      return x;
     }, false
   );
 
@@ -1196,6 +1197,38 @@ JSIL.IgnoredMember = function (memberName) {
 JSIL.UnknownMember = function (memberName) {
   JSIL.Host.abort(new Error("An attempt was made to reference the member '" + memberName + "', but it has no type information."));
 };
+
+JSIL.MakeExternalMember = function (namespaceName, getMemberName) {
+  var state = {
+    warningCount: 0
+  };
+  
+  var result = function ExternalMemberStub () {
+    if (state.warningCount > 3)
+	  return;
+
+    state.warningCount += 1;
+    var msg = "The external method '" + getMemberName + "' of type '" + namespaceName + "' has not been implemented.";
+    var err = new Error(msg);
+
+    if (JSIL.ThrowOnUnimplementedExternals) {
+	  JSIL.Host.abort(err);
+    } else {
+	  if (typeof (err.stack) !== "undefined") {
+	    if (err.stack.indexOf(err.toString()) === 0)
+		  msg = err.stack;
+	    else
+	 	  msg += "\n" + err.stack;
+	  }
+
+  	  JSIL.Host.warning(msg);
+    }
+  };
+	
+  result.__IsPlaceholder__ = true;
+
+  return result;
+}
 
 JSIL.MakeExternalMemberStub = function (namespaceName, getMemberName, inheritedMember) {
   var state = {
@@ -6105,10 +6138,12 @@ JSIL.SignatureBase.prototype.LookupMethod = function (context, name) {
   if (typeof (method) !== "function") {
     var signature = this.toString(name);
 
-    throw new Error(
+    /*throw new Error(
       "No method with signature '" + signature +
       "' defined in context '" + JSIL.GetTypeName(context) + "'"
-    );
+    );*/
+	
+	method = JSIL.MakeExternalMember(JSIL.GetTypeName(context), name);
   }
 
   return method;
