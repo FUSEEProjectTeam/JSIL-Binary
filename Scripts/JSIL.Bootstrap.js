@@ -703,7 +703,7 @@ JSIL.MakeClass("System.Object", "JSIL.ArrayEnumerator", true, ["T"], function ($
       this._array = array;
       this._length = array.length;
       if (typeof (startPosition) !== "number")
-        throw new Error("ArrayEnumerator ctor second argument must be number");
+        JSIL.RuntimeError("ArrayEnumerator ctor second argument must be number");
 
       this._index = startPosition;
     }
@@ -713,7 +713,7 @@ JSIL.MakeClass("System.Object", "JSIL.ArrayEnumerator", true, ["T"], function ($
     new JSIL.MethodSignature(null, []),
     function () {
       if (this._array === null)
-        throw new Error("Enumerator is disposed or not initialized");
+        JSIL.RuntimeError("Enumerator is disposed or not initialized");
 
       this._index = -1;
     }
@@ -851,7 +851,7 @@ $jsilcore.$ListExternals = function ($, T, type) {
   var mscorlib = JSIL.GetCorlib();
 
   if (typeof (T) === "undefined")
-    throw new Error("Invalid use of $ListExternals");
+    JSIL.RuntimeError("Invalid use of $ListExternals");
 
   var getT;
 
@@ -1348,7 +1348,7 @@ JSIL.ImplementExternals("System.Collections.Generic.List`1", function ($) {
     new JSIL.MethodSignature(null, [$jsilcore.TypeRef("System.Array", [T]), $.Int32], []),
     function (array, arrayindex) {
       if (arrayindex != 0) {
-          throw new Error("List<T>.CopyTo not supported for non-zero indexes");
+          JSIL.RuntimeError("List<T>.CopyTo not supported for non-zero indexes");
       }
 
       JSIL.Array.ShallowCopy(array, this._items);
@@ -1428,7 +1428,7 @@ $jsilcore.$ReadOnlyCollectionExternals = function ($) {
       });
     } else {
       if (!list._items || (typeof(list._size) !== "number"))
-        throw new Error("argument must be a list");
+        JSIL.RuntimeError("argument must be a list");
 
       Object.defineProperty(this, "_items", {
         get: function () {
@@ -2396,7 +2396,7 @@ JSIL.MakeArrayEnumerator = function (array, elementType) {
 
 JSIL.Dispose = function (disposable) {
   if (typeof (disposable) === "undefined")
-    throw new Error("Disposable is undefined");
+    JSIL.RuntimeError("Disposable is undefined");
   else if (disposable === null)
     return false;
 
@@ -2412,9 +2412,9 @@ JSIL.Dispose = function (disposable) {
   return true;
 };
 
-JSIL.GetEnumerator = function (enumerable, elementType) {
+JSIL.GetEnumerator = function (enumerable, elementType, fallbackMethodInvoke) {
   if ((typeof (enumerable) === "undefined") || (enumerable === null))
-    throw new Error("Enumerable is null or undefined");
+    JSIL.RuntimeError("Enumerable is null or undefined");
 
   var tIEnumerable = $jsilcore.System.Collections.IEnumerable;
   var tIEnumerable$b1 = null;
@@ -2429,18 +2429,18 @@ JSIL.GetEnumerator = function (enumerable, elementType) {
     result = JSIL.MakeArrayEnumerator(enumerable, elementType);
   else if (typeof (enumerable) === "string")
     result = JSIL.MakeArrayEnumerator(enumerable, elementType);
-  else if (tIEnumerable$b1 && tIEnumerable$b1.$Is(enumerable))
+  else if ((fallbackMethodInvoke !== true) && tIEnumerable$b1 && tIEnumerable$b1.$Is(enumerable))
     result = tIEnumerable$b1.GetEnumerator.Call(enumerable);
-  else if (tIEnumerable.$Is(enumerable))
+  else if ((fallbackMethodInvoke !== true) && tIEnumerable.$Is(enumerable))
     result = tIEnumerable.GetEnumerator.Call(enumerable);
-  else if (typeof (enumerable.GetEnumerator) === "function")
+  else if ((fallbackMethodInvoke !== true) && (typeof (enumerable.GetEnumerator) === "function"))
     // HACK: This is gross.
     result = enumerable.GetEnumerator();
   else
-    throw new Error("Value is not enumerable");
+    JSIL.RuntimeError("Value is not enumerable");
 
   if (!result)
-    throw new Error("Value's GetEnumerator method did not return an enumerable.");
+    JSIL.RuntimeError("Value's GetEnumerator method did not return an enumerable.");
 
   return result;
 };
@@ -3092,6 +3092,47 @@ JSIL.ImplementExternals("System.Collections.Generic.HashSet`1", function ($) {
       return this.$removeByKey(item);
     }
   );
+
+  $.Method({Static:false, Public:true }, "GetEnumerator", 
+    new JSIL.MethodSignature($jsilcore.TypeRef("System.Collections.Generic.HashSet`1/Enumerator", [new JSIL.GenericParameter("T", "System.Collections.Generic.HashSet`1")]), [], []), 
+    function GetEnumerator () {
+      var dict = this._dict;
+
+      return new (JSIL.AbstractEnumerator.Of(this.T)) (
+        function getNext (result) {
+          var keys = this._state.keys;
+          var valueIndex = ++(this._state.valueIndex);
+          var bucketIndex = this._state.bucketIndex;
+
+          while ((bucketIndex >= 0) && (bucketIndex < keys.length)) {
+            var bucketKey = keys[this._state.bucketIndex];
+            var bucket = dict[bucketKey];
+
+            if ((valueIndex >= 0) && (valueIndex < bucket.length)) {
+              result.set(bucket[valueIndex].key);
+              return true;
+            } else {
+              bucketIndex = ++(this._state.bucketIndex);
+              valueIndex = 0;
+            }
+          }
+
+          return false;
+        },
+        function reset () {
+          this._state = {
+            current: JSIL.DefaultValue(this.T),
+            keys: Object.keys(dict),
+            bucketIndex: 0,
+            valueIndex: -1
+          };
+        },
+        function dispose () {
+          this._state = null;
+        }
+      );
+    }
+  );
 });
 
 JSIL.MakeClass("System.Object", "System.Collections.Generic.HashSet`1", true, ["T"], function ($) {
@@ -3151,7 +3192,7 @@ JSIL.ImplementExternals("System.Convert", function ($) {
 
   var makeAdapter = function (adapter) {
     if (!adapter)
-      throw new Error("No adapter provided");
+      JSIL.RuntimeError("No adapter provided");
 
     return function (value) {
       return adapter(value);
@@ -3466,7 +3507,7 @@ JSIL.ImplementExternals("System.Convert", function ($) {
 
   var toBase64StringImpl = function ToBase64String (inArray, offset, length, options) {
     if (options)
-      throw new Error("Base64FormattingOptions not implemented");
+      JSIL.RuntimeError("Base64FormattingOptions not implemented");
 
     var reader = $jsilcore.makeByteReader(inArray, offset, length);
     var result = "";
@@ -3613,25 +3654,72 @@ JSIL.ImplementExternals("System.Convert", function ($) {
 JSIL.MakeStaticClass("System.Convert", true, [], function ($) {
 });
 
+$jsilcore.SerializationScratchBuffers = null;
+
+$jsilcore.GetSerializationScratchBuffers = function () {
+  if (!$jsilcore.SerializationScratchBuffers) {
+    var uint8 = new Uint8Array(32);
+    var buffer = uint8.buffer;
+
+    $jsilcore.SerializationScratchBuffers = {
+      uint8: uint8,
+      uint16: new Uint16Array(buffer),
+      uint32: new Uint32Array(buffer),
+      int8: new Int8Array(buffer),
+      int16: new Int16Array(buffer),
+      int32: new Int32Array(buffer),
+      float32: new Float32Array(buffer),
+      float64: new Float64Array(buffer),
+      slice: function (byteCount) {
+        byteCount = byteCount | 0;
+
+        var result = new Uint8Array(byteCount);
+        for (var i = 0; i < byteCount; i++)
+          result[i] = this.uint8[i];
+
+        return result;
+      },
+      fillFrom: function (bytes, offset, count) {
+        offset = offset | 0;
+        count = count | 0;
+
+        for (var i = 0; i < count; i++)
+          this.uint8[i] = bytes[offset + i];
+      }
+    };
+  }
+
+  return $jsilcore.SerializationScratchBuffers;
+};
+
 
 $jsilcore.BytesFromBoolean = function (value) {
   return [value ? 1 : 0];
 };
 
+
+$jsilcore.BytesFromSingle = function (value) {
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.float32[0] = value;
+  return bufs.slice(4);
+};
+
+$jsilcore.BytesFromDouble = function (value) {
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.float64[0] = value;
+  return bufs.slice(8);
+};
+
 $jsilcore.BytesFromInt16 = function (value) {
-  return [
-    (value >> 0) & 0xFF,
-    (value >> 8) & 0xFF
-  ];
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.int16[0] = value;
+  return bufs.slice(2);
 };
 
 $jsilcore.BytesFromInt32 = function (value) {
-  return [
-    (value >> 0) & 0xFF,
-    (value >> 8) & 0xFF,
-    (value >> 16) & 0xFF,
-    (value >> 24) & 0xFF
-  ];
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.int32[0] = value;
+  return bufs.slice(4);
 };
 
 $jsilcore.BytesFromInt64 = function (value) {
@@ -3650,19 +3738,15 @@ $jsilcore.BytesFromInt64 = function (value) {
 // FIXME: Are these unsigned versions right?
 
 $jsilcore.BytesFromUInt16 = function (value) {
-  return [
-    (value >>> 0) & 0xFF,
-    (value >>> 8) & 0xFF
-  ];
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.uint16[0] = value;
+  return bufs.slice(2);
 };
 
 $jsilcore.BytesFromUInt32 = function (value) {
-  return [
-    (value >>> 0) & 0xFF,
-    (value >>> 8) & 0xFF,
-    (value >>> 16) & 0xFF,
-    (value >>> 24) & 0xFF
-  ];
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.uint32[0] = value;
+  return bufs.slice(4);
 };
 
 $jsilcore.BytesFromUInt64 = function (value) {
@@ -3684,19 +3768,15 @@ $jsilcore.BytesToBoolean = function (bytes, offset) {
 };
 
 $jsilcore.BytesToInt16 = function (bytes, offset) {
-  var value = $jsilcore.BytesToUInt16(bytes, offset);
-  if (value > 32767)
-    return value - 65536;
-  else
-    return value;
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.fillFrom(bytes, offset, 2);
+  return bufs.int16[0];
 };
 
 $jsilcore.BytesToInt32 = function (bytes, offset) {
-  var value = $jsilcore.BytesToUInt32(bytes, offset);
-  if (value > 2147483647)
-    return value - 4294967296;
-  else
-    return value;
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.fillFrom(bytes, offset, 4);
+  return bufs.int32[0];
 };
 
 $jsilcore.BytesToInt64 = function (bytes, offset) {
@@ -3704,19 +3784,31 @@ $jsilcore.BytesToInt64 = function (bytes, offset) {
 };
 
 $jsilcore.BytesToUInt16 = function (bytes, offset) {
-  return (bytes[offset] << 0) |
-         (bytes[offset + 1] << 8)
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.fillFrom(bytes, offset, 2);
+  return bufs.uint16[0];
 };
 
 $jsilcore.BytesToUInt32 = function (bytes, offset) {
-  return (bytes[offset] << 0) |
-         (bytes[offset + 1] << 8) |
-         (bytes[offset + 2] << 16) |
-         (bytes[offset + 3] << 24)
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.fillFrom(bytes, offset, 4);
+  return bufs.uint32[0];
 };
 
 $jsilcore.BytesToUInt64 = function (bytes, offset) {
   return $jsilcore.System.UInt64.FromBytes(bytes, offset);
+};
+
+$jsilcore.BytesToSingle = function (bytes, offset) {
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.fillFrom(bytes, offset, 4);
+  return bufs.float32[0];
+};
+
+$jsilcore.BytesToDouble = function (bytes, offset) {
+  var bufs = $jsilcore.GetSerializationScratchBuffers();
+  bufs.fillFrom(bytes, offset, 8);
+  return bufs.float64[0];
 };
 
 JSIL.ImplementExternals("System.BitConverter", function ($) {
@@ -3757,7 +3849,6 @@ JSIL.ImplementExternals("System.BitConverter", function ($) {
     $jsilcore.BytesFromUInt64
   );  
 
-  /*
   $.Method({Static:true , Public:true }, "GetBytes", 
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.Array", [$.Byte]), [$.Single], [])), 
     $jsilcore.BytesFromSingle
@@ -3767,6 +3858,8 @@ JSIL.ImplementExternals("System.BitConverter", function ($) {
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.Array", [$.Byte]), [$.Double], [])), 
     $jsilcore.BytesFromDouble
   );
+
+  /*
 
   $.Method({Static:true , Public:false}, "GetHexValue", 
     (new JSIL.MethodSignature($.Char, [$.Int32], [])), 
@@ -3789,12 +3882,6 @@ JSIL.ImplementExternals("System.BitConverter", function ($) {
     }
   );
 
-  $.Method({Static:true , Public:true }, "ToDouble", 
-    (new JSIL.MethodSignature($.Double, [$jsilcore.TypeRef("System.Array", [$.Byte]), $.Int32], [])), 
-    function ToDouble (value, startIndex) {
-      throw new Error('Not implemented');
-    }
-  );
   */
 
   $.Method({Static:true , Public:true }, "ToBoolean", 
@@ -3818,13 +3905,6 @@ JSIL.ImplementExternals("System.BitConverter", function ($) {
   );
 
   /*
-
-  $.Method({Static:true , Public:true }, "ToSingle", 
-    (new JSIL.MethodSignature($.Single, [$jsilcore.TypeRef("System.Array", [$.Byte]), $.Int32], [])), 
-    function ToSingle (value, startIndex) {
-      throw new Error('Not implemented');
-    }
-  );
 
   $.Method({Static:true , Public:true }, "ToString", 
     (new JSIL.MethodSignature($.String, [
@@ -3867,6 +3947,15 @@ JSIL.ImplementExternals("System.BitConverter", function ($) {
     $jsilcore.BytesToUInt64
   );
 
+  $.Method({Static:true , Public:true }, "ToSingle", 
+    (new JSIL.MethodSignature($.Single, [$jsilcore.TypeRef("System.Array", [$.Byte]), $.Int32], [])), 
+    $jsilcore.BytesToSingle
+  );
+
+  $.Method({Static:true , Public:true }, "ToDouble", 
+    (new JSIL.MethodSignature($.Double, [$jsilcore.TypeRef("System.Array", [$.Byte]), $.Int32], [])), 
+    $jsilcore.BytesToDouble
+  );
 });
 
 JSIL.MakeStaticClass("System.BitConverter", true, [], function ($) {
@@ -3875,18 +3964,18 @@ JSIL.MakeStaticClass("System.BitConverter", true, [], function ($) {
 JSIL.ParseDataURL = function (dataUrl) {
   var colonIndex = dataUrl.indexOf(":");
   if ((colonIndex != 4) || (dataUrl.substr(0, 5) !== "data:"))
-    throw new Error("Invalid Data URL header");
+    JSIL.RuntimeError("Invalid Data URL header");
 
   var semicolonIndex = dataUrl.indexOf(";");
   var mimeType = dataUrl.substr(colonIndex + 1, semicolonIndex - colonIndex - 1);
 
   var commaIndex = dataUrl.indexOf(",");
   if (commaIndex <= semicolonIndex)
-    throw new Error("Invalid Data URL header");
+    JSIL.RuntimeError("Invalid Data URL header");
 
   var encodingType = dataUrl.substr(semicolonIndex + 1, commaIndex - semicolonIndex - 1);
   if (encodingType.toLowerCase() !== "base64")
-    throw new Error("Invalid Data URL encoding type: " + encodingType);
+    JSIL.RuntimeError("Invalid Data URL encoding type: " + encodingType);
 
   var base64 = dataUrl.substr(commaIndex + 1);
   var bytes = System.Convert.FromBase64String(base64);
@@ -4099,7 +4188,7 @@ JSIL.ImplementExternals("System.Collections.Generic.LinkedList`1", function ($) 
 
   $.RawMethod(false, "$removeNode", function Remove_Node (node) {
     if (node._list !== this)
-      throw new Error("Node is not a member of this list");
+      JSIL.RuntimeError("Node is not a member of this list");
 
     var previous = node._previous || null;
     var next = node._next || null;
