@@ -163,7 +163,10 @@ var $jsilloaderstate = {
   if (config.gamepad)
     environment.loadScript(libraryRoot + "gamepad.js");
 
+  // fusee custom
   environment.loadScript(libraryRoot + "soundjs-0.5.0.min.js");
+  environment.loadScript(libraryRoot + "opentype.js");
+
   environment.loadScript(libraryRoot + "ES5.js");
   environment.loadScript(libraryRoot + "mersenne.js");
   environment.loadScript(libraryRoot + "JSIL.Core.js");
