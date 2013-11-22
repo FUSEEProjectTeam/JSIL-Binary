@@ -36,6 +36,9 @@ JSIL.MakeInterface(
   JSIL.MakeClass($asm04.TypeRef("System.Object"), "System.Exception", true, [], function ($interfaceBuilder) {
     $ = $interfaceBuilder;
 
+	$.Property({Static:false, Public:true , Virtual:true }, "Message", $.String)
+      .Attribute($asm04.TypeRef("__DynamicallyInvokableAttribute"));
+	
     $.ImplementInterfaces(
       /* 0 */ $asm04.TypeRef("System.Runtime.Serialization.ISerializable"), 
       /* 1 */ $asm04.TypeRef("System.Runtime.InteropServices._Exception")
@@ -11240,6 +11243,14 @@ JSIL.MakeInterface(
   JSIL.MakeStruct($asm04.TypeRef("System.ValueType"), "System.Collections.Generic.KeyValuePair`2", true, ["TKey", "TValue"], function ($interfaceBuilder) {
     $ = $interfaceBuilder;
 
+	$.Field({Static:false, Public:false}, "key", $.GenericParameter("TKey")); 
+    $.Field({Static:false, Public:false}, "value", $.GenericParameter("TValue"));
+	
+    $.Property({Static:false, Public:true }, "Key", new JSIL.GenericParameter("TKey", "System.Collections.Generic.KeyValuePair`2"))
+      .Attribute($asm04.TypeRef("__DynamicallyInvokableAttribute"));
+    $.Property({Static:false, Public:true }, "Value", new JSIL.GenericParameter("TValue", "System.Collections.Generic.KeyValuePair`2"))
+      .Attribute($asm04.TypeRef("__DynamicallyInvokableAttribute"));
+	
     return function (newThisType) { $thisType = newThisType; }; 
   })
     .Attribute($asm04.TypeRef("__DynamicallyInvokableAttribute"));
