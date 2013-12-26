@@ -4036,6 +4036,8 @@ JSIL.InitializeType = function (type) {
       classObject.__PreInitMembrane__.maybeInit();
     if (classObject.prototype && classObject.prototype.__PreInitMembrane__)
       classObject.prototype.__PreInitMembrane__.maybeInit();
+  } else {
+    // console.log("Type '" + typeObject.__FullName__ + "' is open so not initializing");
   }
 
   // Any closed forms of the type, if it's an open type, should be initialized too.
@@ -4565,6 +4567,39 @@ JSIL.$ActuallyMakeCastMethods = function (publicInterface, typeObject, specialTy
       break;
 
     case "array":
+      // Allow casting array interface overlays back to appropriate array types
+      var _isFunction = isFunction;
+      isFunction = function Is_Array (expression) {
+        return _isFunction(expression) || (
+          expression &&
+          expression.$overlayToArray && 
+          expression.$overlayToArray(typeObject)
+        );
+      };
+
+      var _asFunction = asFunction;
+      asFunction = function As_Array (expression) {
+        var result = _asFunction(expression);
+
+        if ((result === null) && (expression && expression.$overlayToArray))
+          result = expression.$overlayToArray(typeObject);
+
+        return result;
+      };
+
+      castFunction = function CastArray (expression) {
+        if (_isFunction(expression))
+          return expression;
+
+        if (expression && expression.$overlayToArray) {
+          var overlayArray = expression.$overlayToArray(typeObject);
+          if (overlayArray)
+            return overlayArray;
+        }
+
+        throwCastError(expression);
+      };
+
       break;
 
     case "char":
@@ -6576,6 +6611,15 @@ JSIL.ConstructorSignature.prototype.$MakeConstructMethod = function () {
   var publicInterface = typeObject.__PublicInterface__;
   var argumentTypes = this.argumentTypes;
 
+  if (!typeObject.__IsClosed__)
+    return function () {
+      throw new Error("Cannot create an instance of an open type");
+    };
+  else if (typeObject.__IsInterface__)
+    return function () {
+      throw new Error("Cannot create an instance of an interface");
+    };
+
   var closure = {
     typeObject: typeObject,
     publicInterface: publicInterface
@@ -7169,7 +7213,7 @@ JSIL.CreateInstanceOfType = function (type, constructorName, constructorArgument
   if (!recordSet)
     recordSet = JSIL.$CreateInstanceOfTypeTable[type.__TypeId__] = new JSIL.CreateInstanceOfTypeRecordSet(type);
 
-  if (JSIL.IsArray(constructorName)) {
+  if (JSIL.IsArray(constructorName) || (typeof (constructorName) === "undefined")) {
     constructorArguments = constructorName;
     constructorName = "_ctor";
   }
@@ -7187,6 +7231,11 @@ JSIL.CreateInstanceOfType = function (type, constructorName, constructorArgument
     } else if (typeof (constructorName) === "function") {
       constructor = constructorName;
     }
+
+    if (!type.__IsClosed__)
+      throw new Error("Cannot create an instance of an open type");
+    else if (type.__IsInterface__)
+      throw new Error("Cannot create an instance of an interface");
 
     record = recordSet.records[constructorName] = new JSIL.CreateInstanceOfTypeRecord(
       type, constructorName, constructor, publicInterface

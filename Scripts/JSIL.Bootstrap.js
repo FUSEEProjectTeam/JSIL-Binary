@@ -756,6 +756,17 @@ JSIL.MakeClass("System.Object", "JSIL.ArrayInterfaceOverlay", true, ["T"], funct
     }
   );
 
+  $.RawMethod(false, "$overlayToArray",
+    function (T) {
+      // We don't want to allow conversion to an unrelated array type.
+      // FIXME: Covariance? Contravariance?
+      if (T.__IsArray__ && (T.__ElementType__ === this.T))
+        return this._array;
+      else
+        return null;
+    }
+  );
+
   $.Method({Static:false, Public:true }, "GetEnumerator", 
     new JSIL.MethodSignature($jsilcore.TypeRef("System.Collections.IEnumerator"), [], []),
     function () {
@@ -785,6 +796,34 @@ JSIL.MakeClass("System.Object", "JSIL.ArrayInterfaceOverlay", true, ["T"], funct
     new JSIL.MethodSignature($.Int32, [], []),
     function get_Count () {
       return this._array.length;
+    }
+  );
+  
+  $.Method({Static:false, Public:true }, "get_Item", 
+    new JSIL.MethodSignature(T, [$.Int32], []),
+    function get_Item (index) {
+      return this._array[index];
+    }
+  );
+  
+  $.Method({Static:false, Public:true }, "set_Item", 
+    new JSIL.MethodSignature(null, [$.Int32, T], []),
+    function set_Item (index, value) {
+      this._array[index] = value;
+    }
+  );
+  
+  $.Method({Static:false, Public:true }, "Contains", 
+    new JSIL.MethodSignature($.Boolean, [T], []),
+    function Contains (value) {
+      return (this._array.indexOf(value) >= 0);
+    }
+  );
+  
+  $.Method({Static:false, Public:true }, "IndexOf", 
+    new JSIL.MethodSignature($.Int32, [T], []),
+    function IndexOf (value) {
+      return this._array.indexOf(value);
     }
   );
 
