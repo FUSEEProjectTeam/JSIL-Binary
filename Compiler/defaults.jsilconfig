@@ -6,7 +6,7 @@
       "^System,",
       "^System\\.(.+),",
       "^Microsoft\\.(.+),",
-      "Mono.*",
+      "Mono.*,",
       "FSharp.Core"
     ],
     "Ignored": [
@@ -15,12 +15,14 @@
       "SMDiagnostics,",
       "System\\.EnterpriseServices,",
       "System\\.Security,",
+      "System\\.Runtime\\.Serialization,",	  
       "System\\.Runtime\\.Serialization\\.Formatters\\.Soap,",
       "System\\.Runtime\\.DurableInstancing,",
       "System\\.Data\\.SqlXml,",
       "JSIL.Meta,",
-      "Mono.Posix.*",
-      "protobuf-net.*"
+      "Mono\\.Posix\\.*,",
+	  "System\\.Web\\.*,",
+	  "System\\.ServiceModel\\.*"
     ]
   },
   "ProfileSettings": {
