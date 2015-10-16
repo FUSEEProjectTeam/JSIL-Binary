@@ -1,8 +1,9 @@
 ﻿{
   "OutputDirectory": "%configdirectory%",
+  "ProxyWarnings": false,
   "Assemblies": {
     "Stubbed": [
-      "mscorlib,",
+      "^mscorlib,",
       "^System,",
       "^System\\.(.+),",
       "^Microsoft\\.(.+),",
