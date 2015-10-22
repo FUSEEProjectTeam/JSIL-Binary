@@ -525,8 +525,7 @@ JSIL.GetAssembly = function (assemblyName, requireExisting) {
 
   JSIL.SetValueProperty(result, "TypeRef",
     function (name, ga) {
-	  var x = new JSIL.TypeRef(result, name, ga)
-      return x;
+	  return new JSIL.TypeRef(result, name, ga);
     }, false
   );
 
