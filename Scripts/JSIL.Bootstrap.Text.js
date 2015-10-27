@@ -392,7 +392,7 @@ JSIL.StringFromCharArray = function (chars, startIndex, length) {
     length = chars.length;
 
   if (arguments.length > 1) {
-    var arr = chars.slice(startIndex, length);
+    var arr = chars.slice(startIndex, startIndex + length);
     return arr.join("");
   } else {
     return chars.join("");
@@ -686,11 +686,19 @@ JSIL.ImplementExternals(
         }
       }
     );
+
+    $.Method({ Static: false, Public: true }, "get_Length",
+      new JSIL.MethodSignature($.Int32, [], []),
+      function() {
+        return this.length;
+      }
+    );
   }
 );
 
 JSIL.MakeClass("System.Object", "System.String", true, [], function ($) {
   $.Field({ Static: true, Public: true }, "Empty", $.String, "");
+  $.Property({ Public: true, Static: false }, "Length");
 });
 JSIL.MakeEnum(
   "System.StringComparison", true, {
@@ -2173,6 +2181,15 @@ JSIL.ImplementExternals("System.Char", function ($) {
       return (
         ((charCode >= 65) && (charCode <= 90)) ||
         ((charCode >= 97) && (charCode <= 122)));
+    }
+  );
+
+  $.Method({ Static: true, Public: true }, "IsNumber",
+    new JSIL.MethodSignature($.Boolean, [$.Char], []),
+    function IsNumeric(c) {
+      // FIXME: Unicode
+      var charCode = c.charCodeAt(0);
+      return (charCode >= 48) && (charCode <= 57);
     }
   );
 

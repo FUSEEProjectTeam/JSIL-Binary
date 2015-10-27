@@ -17,7 +17,14 @@ JSIL.ImplementExternals("System.Enum", function ($) {
     $.Method({ Static: true, Public: true }, "ToObject",
       (new JSIL.MethodSignature($.Object, ["System.Type", $.Int32], [])),
       function ToObject(enumType, value) {
-          return enumType[enumType.__ValueToName__[value]];
+        return enumType.__PublicInterface__[enumType.__ValueToName__[value]];
+      }
+    );
+
+    $.Method({ Static: true, Public: true }, "ToObject",
+      (new JSIL.MethodSignature($.Object, ["System.Type", $.Object], [])),
+      function ToObject(enumType, value) {
+        return enumType.__PublicInterface__[enumType.__ValueToName__[value.valueOf()]];
       }
     );
 
@@ -159,26 +166,6 @@ JSIL.ImplementExternals("System.Object", function ($) {
 });
 
 JSIL.MakeClass(Object, "System.Object", true, [], function ($) {
-    $.ExternalMethod({ Static: false, Public: true }, ".ctor",
-      new JSIL.MethodSignature(null, [], [], $jsilcore)
-    );
-
-    $.ExternalMethod({ Static: false, Public: true }, "GetType",
-      new JSIL.MethodSignature("System.Type", [], [], $jsilcore)
-    );
-
-    $.ExternalMethod({ Static: false, Public: true }, "Object.Equals",
-      new JSIL.MethodSignature("System.Boolean", [$.Type], [], $jsilcore)
-    );
-
-    $.ExternalMethod({ Static: false, Public: true }, "MemberwiseClone",
-      new JSIL.MethodSignature("System.Object", [], [], $jsilcore)
-    );
-
-    $.ExternalMethod({ Static: false, Public: true }, "toString",
-      new JSIL.MethodSignature("System.String", [], [], $jsilcore)
-    );
-
     $jsilcore.SystemObjectInitialized = true;
 });
 JSIL.MakeClass("System.Object", "JSIL.CollectionInitializer", true, [], function ($) {
@@ -413,6 +400,10 @@ JSIL.MakeClass("System.Object", "System.Array", true, [], function ($) {
 
     $.RawMethod(true, "Of$NoInitialize", of);
     $.RawMethod(true, "Of", of);
+
+  $.ImplementInterfaces(
+    $jsilcore.TypeRef("System.Collections.IEnumerable")
+  );
 });
 
 JSIL.ImplementExternals(
