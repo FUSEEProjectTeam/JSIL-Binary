@@ -7,13 +7,13 @@ if (typeof (JSIL) === "undefined")
 if (!$jsilcore)
   throw new Error("JSIL.Core is required");
 
-JSIL.ReflectionGetTypeInternal = function (thisAssembly, name, throwOnFail, ignoreCase) {
+JSIL.ReflectionGetTypeInternal = function (thisAssembly, name, throwOnFail, ignoreCase, onlySpecificAssembly) {
   var parsed = JSIL.ParseTypeName(name);
 
   var result = JSIL.GetTypeInternal(parsed, thisAssembly, false);
 
   // HACK: Emulate fallback to global namespace search.
-  if (!result) {
+  if (!result && !onlySpecificAssembly) {
     result = JSIL.GetTypeInternal(parsed, JSIL.GlobalNamespace, false);
   }
 
@@ -30,7 +30,7 @@ $jsilcore.$MethodGetParameters = function (method) {
   var result = method._cachedParameters;
 
   if (typeof (result) === "undefined") {
-    result = method._cachedParameters = [];
+    result = method._cachedParameters = JSIL.Array.New($jsilcore.System.Reflection.ParameterInfo, 0);
     method.InitResolvedSignature();
 
     var argumentTypes = method._data.resolvedSignature.argumentTypes;
@@ -57,7 +57,7 @@ $jsilcore.$MethodGetParameters = function (method) {
 $jsilcore.$MethodGetParameterTypes = function (method) {
   var signature = method._data.signature;
   var argumentTypes = signature.argumentTypes;
-  var result = [];
+  var result = JSIL.Array.New($jsilcore.System.Type, 0);
 
   for (var i = 0, l = argumentTypes.length; i < l; i++) {
     var argumentType = argumentTypes[i];
@@ -250,6 +250,16 @@ JSIL.ImplementExternals(
       }
     );
 
+    $.Method({ Public: true, Static: false }, "IsInstanceOfType",
+      new JSIL.MethodSignature($.Boolean, [$.Object]),
+      function (obj) {
+        if (obj === null)
+          return false;
+
+        return this.IsAssignableFrom(JSIL.GetType(obj));
+      }
+    );
+
     $.Method({ Public: true, Static: false }, "GetMembers",
       new JSIL.MethodSignature(memberArray, []),
       function () {
@@ -258,7 +268,8 @@ JSIL.ImplementExternals(
           defaultFlags(),
           null,
           null,
-          true
+          true,
+          $jsilcore.System.Array.Of($jsilcore.System.Reflection.MemberInfo).__Type__
         );
       }
     );
@@ -271,7 +282,8 @@ JSIL.ImplementExternals(
           flags,
           null,
           null,
-          true
+          true,
+          $jsilcore.System.Array.Of($jsilcore.System.Reflection.MemberInfo).__Type__
         );
       }
     );
@@ -350,7 +362,10 @@ JSIL.ImplementExternals(
           System.Reflection.BindingFlags.Instance |
           System.Reflection.BindingFlags.Static |
           System.Reflection.BindingFlags.Public,
-          "MethodInfo"
+          "MethodInfo",
+          null,
+          false,
+          $jsilcore.System.Array.Of($jsilcore.System.Reflection.MethodInfo).__Type__
         );
       }
     );
@@ -359,7 +374,7 @@ JSIL.ImplementExternals(
       new JSIL.MethodSignature(methodArray, [$jsilcore.TypeRef("System.Reflection.BindingFlags")]),
       function (flags) {
         return JSIL.GetMembersInternal(
-          this, flags, "MethodInfo"
+          this, flags, "MethodInfo", null, false, $jsilcore.System.Array.Of($jsilcore.System.Reflection.MethodInfo).__Type__
         );
       }
     );
@@ -374,7 +389,8 @@ JSIL.ImplementExternals(
           System.Reflection.BindingFlags.Public,
           "EventInfo",
           null,
-          true
+          true,
+          $jsilcore.System.Array.Of($jsilcore.System.Reflection.EventInfo).__Type__
         );
       }
     );
@@ -383,7 +399,7 @@ JSIL.ImplementExternals(
       new JSIL.MethodSignature(eventArray, [$jsilcore.TypeRef("System.Reflection.BindingFlags")]),
       function (flags) {
         return JSIL.GetMembersInternal(
-          this, flags, "EventInfo", null, true
+          this, flags, "EventInfo", null, true, $jsilcore.System.Array.Of($jsilcore.System.Reflection.EventInfo).__Type__
         );
       }
     );
@@ -454,7 +470,10 @@ JSIL.ImplementExternals(
           //  since calling the System.Object constructor to create an instance of String
           //  is totally insane.
           System.Reflection.BindingFlags.DeclaredOnly,
-          "ConstructorInfo"
+          "ConstructorInfo",
+          null,
+          false,
+          $jsilcore.System.Array.Of($jsilcore.System.Reflection.ConstructorInfo).__Type__
         );
       }
     );
@@ -463,7 +482,7 @@ JSIL.ImplementExternals(
       new JSIL.MethodSignature(methodArray, [$jsilcore.TypeRef("System.Reflection.BindingFlags")]),
       function (flags) {
         return JSIL.GetMembersInternal(
-          this, flags | System.Reflection.BindingFlags.DeclaredOnly, "ConstructorInfo"
+          this, flags | System.Reflection.BindingFlags.DeclaredOnly, "ConstructorInfo", null, false, $jsilcore.System.Array.Of($jsilcore.System.Reflection.ConstructorInfo).__Type__
         );
       }
     );
@@ -476,7 +495,10 @@ JSIL.ImplementExternals(
           System.Reflection.BindingFlags.Instance |
           System.Reflection.BindingFlags.Static |
           System.Reflection.BindingFlags.Public,
-          "FieldInfo"
+          "FieldInfo",
+          null,
+          false,
+          $jsilcore.System.Array.Of($jsilcore.System.Reflection.FieldInfo).__Type__
         );
       }
     );
@@ -485,7 +507,7 @@ JSIL.ImplementExternals(
       new JSIL.MethodSignature(fieldArray, [$jsilcore.TypeRef("System.Reflection.BindingFlags")]),
       function (flags) {
         return JSIL.GetMembersInternal(
-          this, flags, "FieldInfo"
+          this, flags, "FieldInfo", null, false, $jsilcore.System.Array.Of($jsilcore.System.Reflection.FieldInfo).__Type__
         );
       }
     );
@@ -500,7 +522,8 @@ JSIL.ImplementExternals(
           System.Reflection.BindingFlags.Public,
           "PropertyInfo",
           null,
-          true
+          true,
+          $jsilcore.System.Array.Of($jsilcore.System.Reflection.PropertyInfo).__Type__
         );
       }
     );
@@ -509,7 +532,7 @@ JSIL.ImplementExternals(
       new JSIL.MethodSignature(propertyArray, [$jsilcore.TypeRef("System.Reflection.BindingFlags")]),
       function (flags) {
         return JSIL.GetMembersInternal(
-          this, flags, "PropertyInfo", null, true
+          this, flags, "PropertyInfo", null, true, $jsilcore.System.Array.Of($jsilcore.System.Reflection.PropertyInfo).__Type__
         );
       }
     );
@@ -598,7 +621,7 @@ JSIL.ImplementExternals(
     $.Method({ Public: true, Static: false }, "GetInterfaces",
       new JSIL.MethodSignature($jsilcore.TypeRef("System.Array", [$.Type]), []),
       function () {
-        return JSIL.GetInterfacesImplementedByType(this, true, false);
+        return JSIL.GetInterfacesImplementedByType(this, true, false, false, $jsilcore.System.Array.Of($jsilcore.System.Type).__Type__);
       }
     );
 
@@ -909,11 +932,15 @@ JSIL.ImplementExternals("System.Reflection.PropertyInfo", function ($) {
 
       var setMethod = this.GetSetMethod(true);
       if (setMethod) {
-        var result = setMethod.GetParameters();
-        return result.slice(0, result.length - 1);
+        var parameters = setMethod.GetParameters();
+        var result = JSIL.Array.New($jsilcore.System.Reflection.ParameterInfo, parameters.length - 1);
+        for (var i = 0; i < result.length - 1; i++) {
+          result[i] = parameters[i];
+        }
+        return result;
       }
 
-      return [];
+      return JSIL.Array.New($jsilcore.System.Reflection.ParameterInfo, 0);
     }
   );
 
@@ -1092,7 +1119,8 @@ JSIL.ImplementExternals(
     $.Method({ Static: false, Public: true, Virtual: true }, "SetValue",
       (new JSIL.MethodSignature($.Object, [$.Object, $.Object], [])),
       function SetValue(obj, value) {
-        if (!this.get_FieldType().$Is(value))
+        var fieldType = this.get_FieldType();
+        if (!fieldType.$Is(value))
           throw new System.ArgumentException("value");
 
         if (this.IsStatic) {
@@ -1106,6 +1134,10 @@ JSIL.ImplementExternals(
 
         if (!this.DeclaringType.IsAssignableFrom(obj.__ThisType__)) {
           throw new System.Exception("Field is not defined on the target object.");
+        }
+
+        if (fieldType.IsValueType) {
+          value = fieldType.__PublicInterface__.$Cast(value);
         }
 
         obj[this._descriptor.Name] = value;
@@ -1260,8 +1292,13 @@ JSIL.ImplementExternals("System.Reflection.MethodInfo", function ($) {
       if (parameters !== null) {
         parameters = parameters.slice();
         for (var i = 0; i < parametersCount; i++) {
-          if (parameters[i] === null && parameterTypes[i].IsValueType)
-            parameters[i] = JSIL.DefaultValue(parameterTypes[i]);
+          if (parameterTypes[i].IsValueType) {
+            if (parameters[i] === null) {
+              parameters[i] = JSIL.DefaultValue(parameterTypes[i]);
+            } else {
+              parameters[i] = parameterTypes[i].__PublicInterface__.$Cast(parameters[i]);
+            }
+          }
         }
       }
 
@@ -1593,14 +1630,14 @@ JSIL.MakeClass("System.Object", "System.Reflection.Assembly", true, [], function
   $.Method({ Static: false, Public: true }, "GetType",
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.Type"), [$.String], [])),
     function GetType(name) {
-      return JSIL.GetTypeFromAssembly(this, name, null, false);
+      return JSIL.ReflectionGetTypeInternal(this, name, false, false, true);
     }
   );
 
   $.Method({ Static: false, Public: true }, "GetType",
     (new JSIL.MethodSignature($jsilcore.TypeRef("System.Type"), [$.String, $.Boolean], [])),
     function GetType(name, throwOnError) {
-      return JSIL.GetTypeFromAssembly(this, name, null, throwOnError);
+      return JSIL.ReflectionGetTypeInternal(this, name, throwOnError, false, true);
     }
   );
 
@@ -1620,7 +1657,7 @@ JSIL.MakeClass("System.Object", "System.Reflection.Assembly", true, [], function
       if (ignoreCase)
         throw new Error("ignoreCase not implemented");
 
-      return JSIL.GetTypeFromAssembly(this, name, null, throwOnError);
+      return JSIL.ReflectionGetTypeInternal(this, name, throwOnError, ignoreCase, true);
     }
   );
 

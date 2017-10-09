@@ -73,7 +73,7 @@ function doXHR (uri, asBinary, onComplete) {
 
   needCORS = needCORS && !sameHost;
 
-  /*if (location.protocol === "file:") {
+  if (location.protocol === "file:") {
     var errorText = "Loading assets from file:// is not possible in modern web browsers. You must host your application on a web server.";
 
     if (console && console.error) {
@@ -83,7 +83,7 @@ function doXHR (uri, asBinary, onComplete) {
     } else {
       throw new Error(errorText);
     }
-  } else {*/
+  } else {
     req = new XMLHttpRequest();
 
     if (needCORS && !("withCredentials" in req)) {
@@ -99,7 +99,7 @@ function doXHR (uri, asBinary, onComplete) {
         onComplete(null, "CORS unavailable");
         return;
       }
-    //}
+    }
   }
 
   var isDone = false;
@@ -396,8 +396,12 @@ var assetLoaders = {
 
     var finisher = function () {
       $jsilbrowserstate.allAssetNames.push(filename);
-      allAssets[getAssetName(filename)] = new HTML5ImageAsset(getAssetName(filename, true), e);
+      allAssets[getAssetName(filename)] = {"image": e};
     };
+    /*var finisher = function () {
+      $jsilbrowserstate.allAssetNames.push(filename);
+      allAssets[getAssetName(filename)] = new HTML5ImageAsset(getAssetName(filename, true), e);
+    };*/
 
     JSIL.Browser.RegisterOneShotEventListener(e, "error", true, onError);
     JSIL.Browser.RegisterOneShotEventListener(e, "load", true, onDoneLoading.bind(null, finisher));
@@ -408,17 +412,6 @@ var assetLoaders = {
       if ((result !== null) && (!error)) {
         $jsilbrowserstate.allFileNames.push(filename);
         allFiles[filename.toLowerCase()] = result;
-        onDoneLoading(null);
-      } else {
-        onError(error);
-      }
-    });
-  },
-   "Font": function loadFont (filename, data, onError, onDoneLoading) {
-    loadBinaryFileAsync(jsilConfig.fileRoot + filename, function (result, error) {
-      if ((result !== null) && (!error)) {
-        $jsilbrowserstate.allAssetNames.push(filename);
-        allAssets[getAssetName(filename)] = opentype.parse(result.buffer);
         onDoneLoading(null);
       } else {
         onError(error);
@@ -516,8 +509,12 @@ function loadImageCORSHack (filename, data, onError, onDoneLoading) {
       var e = document.createElement("img");
       var finisher = function () {
         $jsilbrowserstate.allAssetNames.push(filename);
-        allAssets[getAssetName(filename)] = new HTML5ImageAsset(getAssetName(filename, true), e);
+        allAssets[getAssetName(filename)] = {"image": e};
       };
+      /*var finisher = function () {
+        $jsilbrowserstate.allAssetNames.push(filename);
+        allAssets[getAssetName(filename)] = new HTML5ImageAsset(getAssetName(filename, true), e);
+      };*/
       JSIL.Browser.RegisterOneShotEventListener(e, "error", true, onError);
       JSIL.Browser.RegisterOneShotEventListener(e, "load", true, onDoneLoading.bind(null, finisher));
       e.src = objectURL;
@@ -548,4 +545,8 @@ function initAssetLoaders () {
   JSIL.InitBlobBuilder();
   initCORSHack();
   initSoundLoader();
+
+  $makeXNBAssetLoader("XNB", "RawXNBAsset");
+  $makeXNBAssetLoader("SpriteFont", "SpriteFontAsset");
+  $makeXNBAssetLoader("Texture2D", "Texture2DAsset");
 };

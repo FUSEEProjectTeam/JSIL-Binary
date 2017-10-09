@@ -250,11 +250,6 @@ var $jsilloaderstate = {
     environment.loadScript(libraryRoot + "gamepad.js");
 
   environment.loadScript(libraryRoot + "Polyfills.js");
-
-  // fusee custom
-  environment.loadScript(libraryRoot + "soundjs.min.js");
-  environment.loadScript(libraryRoot + "opentype.js");
-
   environment.loadScript(libraryRoot + "mersenne.js");
 
   if (config.typedObjects || false) {
@@ -290,8 +285,11 @@ var $jsilloaderstate = {
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.DateTime.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.Text.js");
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.Resources.js");
-  environment.loadScript(libraryRoot + "JSIL.Bootstrap.Linq.js");
+  if (config.bclMode !== "translated") {
+    environment.loadScript(libraryRoot + "JSIL.Bootstrap.Linq.js");
+  }
   environment.loadScript(libraryRoot + "JSIL.Bootstrap.Async.js");
+  environment.loadScript(libraryRoot + "JSIL.Bootstrap.Dynamic.js");
 
   if (config.xml || environment.getUserSetting("xml"))
     environment.loadScript(libraryRoot + "JSIL.XML.js");
@@ -329,11 +327,26 @@ var $jsilloaderstate = {
   for (var i = 0, l = manifests.length; i < l; i++)
     environment.loadScript(manifestRoot + manifests[i] + ".manifest.js");
 
-  contentManifest["JSIL"].push(["Library", "XNA4.js"]);
-
- if (config.winForms || config.monogame) {
+  if (config.winForms || config.monogame) {
     contentManifest["JSIL"].push(["Library", "System.Drawing.js"]);
     contentManifest["JSIL"].push(["Library", "System.Windows.js"]);
+  }
+
+  if (config.xna) {
+    contentManifest["JSIL"].push(["Library", "XNA/XNA4.js"]);
+
+    switch (Number(config.xna)) {
+      case 4:
+        break;
+      default:
+        throw new Error("Unsupported XNA version");
+    }
+
+    contentManifest["JSIL"].push(["Library", "XNA/Content.js"]);
+    contentManifest["JSIL"].push(["Library", "XNA/Graphics.js"]);
+    contentManifest["JSIL"].push(["Library", "XNA/Input.js"]);
+    contentManifest["JSIL"].push(["Library", "XNA/Audio.js"]);
+    contentManifest["JSIL"].push(["Library", "XNA/Storage.js"]);
   }
 
   if (config.monogame) {

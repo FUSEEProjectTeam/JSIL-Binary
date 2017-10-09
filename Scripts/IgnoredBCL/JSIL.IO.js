@@ -104,6 +104,13 @@ var $bytestream = function ($) {
     }
   );
 
+  $.Method({ Static: false, Public: true }, "get_CanWrite",
+    (new JSIL.MethodSignature($.Boolean, [], [])),
+    function get_CanWrite() {
+        return true;
+    }
+  );
+
   $.Method({ Static: false, Public: true }, "Seek",
     (new JSIL.MethodSignature($.Int64, [$.Int64, $jsilcore.TypeRef("System.IO.SeekOrigin")], [])),
     function Seek(offset, origin) {
@@ -1229,6 +1236,13 @@ JSIL.ImplementExternals("System.IO.File", function ($) {
       (new JSIL.MethodSignature($jsilcore.TypeRef("System.IO.StreamWriter"), [$.String], [])),
       function CreateText(path) {
           return new System.IO.StreamWriter(path, false);
+      }
+    );
+
+    $.Method({ Static: true, Public: true }, "OpenText",
+      (new JSIL.MethodSignature($jsilcore.TypeRef("System.IO.StreamReader"), [$.String], [])),
+      function OpenText(path) {
+          return new System.IO.StreamReader(path, false);
       }
     );
 
